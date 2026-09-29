@@ -30,6 +30,7 @@ The other documents: the [README](README.md) says how to run the portal and what
 * [Uploads](#uploads)
 * [Security headers](#security-headers)
 * [Seeding and demo mode](#seeding-and-demo-mode)
+* [Configuration](#configuration)
 * [Storage](#storage)
 * [If this had to host a big public event](#if-this-had-to-host-a-big-public-event)
 
@@ -156,16 +157,14 @@ sequenceDiagram
 The application lives in `src/`; the test suite in `tests/`, beside it. The apps build on each other in layers:
 
 ```mermaid
-flowchart TB
-    api["<b>api</b><br/>the REST API, over everything below"]
-    out["<b>What comes out of an event</b><br/>records: certificates and judges' records<br/>embeds: the gallery widget<br/>transfer: import and export<br/>webhooks: notifications"]
-    community["<b>Judging and the community</b><br/>judging: rubric, assignment, scores, results<br/>voting: the community vote<br/>integrity: rate limits and abuse flags"]
-    taking["<b>Taking part</b><br/>teams: teams and invite links<br/>projects: submissions, gallery, comments"]
-    foundation["<b>Foundation</b><br/>events: events, roles, deadlines, the activity log<br/>accounts: people, sign-in, sessions<br/>portal: settings, security headers"]
-    api --> out --> community --> taking --> foundation
+flowchart LR
+    api["<b>api</b><br/>the REST API"] --> out["<b>What comes out</b><br/>records, embeds,<br/>transfer, webhooks"]
+    out --> community["<b>Judging and voting</b><br/>judging, voting,<br/>integrity"]
+    community --> taking["<b>Taking part</b><br/>teams, projects"]
+    taking --> foundation["<b>Foundation</b><br/>events, accounts,<br/>portal"]
 ```
 
-Each box is a layer, and each layer builds on the ones below it: judging uses projects, projects use events, and the API sits on top of all of them. A few imports run the other way, inside functions: the seeder in `events` creates judging and voting rows, and `events.log_activity` hands every log entry to `webhooks`.
+Each box is a layer that builds on the ones to its right: judging uses projects, projects use events, and the API sits on top of all of them. The table below says what each app holds. A few imports run the other way, inside functions: the seeder in `events` creates judging and voting rows, and `events.log_activity` hands every log entry to `webhooks`.
 
 | Path | What's in it |
 | --- | --- |
@@ -194,7 +193,6 @@ Each box is a layer, and each layer builds on the ones below it: judging uses pr
 
 ```mermaid
 sequenceDiagram
-    autonumber
     actor B as Client
     participant M as Middleware
     participant V as View
@@ -202,18 +200,14 @@ sequenceDiagram
     participant S as Service
     participant D as Database
     B->>M: request
-    M->>M: static? session? CSRF?
     M->>V: request + user
     V->>A: who is this?
     A-->>V: their role here
     V->>S: do the action
-    S->>D: begin, re-read event
-    S->>S: window, then rules
-    S->>D: write + log line
+    S->>D: check, then write + log
     D-->>S: commit
     S-->>V: result or error
-    V-->>M: page or JSON
-    M-->>B: answer + headers
+    V-->>B: answer + headers
 ```
 
 The client is a browser or a program; the view is a page or an API endpoint.
@@ -251,34 +245,24 @@ Views are thin: they load things, ask `access.py`, call a service, and render. T
 The brief's point that "hiding a button is not refusing a request" is the design rule here. This is the one rule for whether someone may see a project, used by the gallery, the home page, both APIs, the embed, images and comments (`events/access.can_view_project`, with `projects/views.listed_projects` for lists):
 
 ```mermaid
-flowchart TD
-    start(["Someone asks for a project:<br/>its page, an image, an API record"]) --> exists{"Does it exist?"}
-    exists -- no --> nf["404 Not found"]
-    exists -- yes --> listed{"Submitted, not a flagged duplicate,<br/>event published, and the deadline passed<br/>(or the organizers show projects early)?"}
-    listed -- yes --> show["Show it"]
-    listed -- no --> signed{"Signed in?"}
-    signed -- no --> nf
-    signed -- yes --> staff{"An organizer of the event,<br/>or a platform admin?"}
-    staff -- yes --> show
-    staff -- no --> team{"On the project's team?"}
-    team -- yes --> show
-    team -- no --> nf
+flowchart LR
+    ask(["A request for a project"]) --> public{"Public?"}
+    public -- yes --> show["Show it"]
+    public -- no --> insider{"Organizer, admin<br/>or on its team?"}
+    insider -- yes --> show
+    insider -- no --> nf["404, like a missing id"]
 ```
 
-Every "no" ends in the same 404 that a missing id gets, on the pages and the API, so guessing ids reveals nothing about drafts or hidden projects.
+"Public" means submitted, not a flagged duplicate, in a published event, and past the deadline (or the organizers chose to show projects early). A project that doesn't exist gets the same 404, so every "no" looks like a missing id, on the pages and the API, so guessing ids reveals nothing about drafts or hidden projects.
 
 Judging data has its own layer, `judging/access.py`:
 
 ```mermaid
-flowchart TD
-    q(["A judge asks for something"]) --> kind{"What is it?"}
-    kind -- "another judge's scores" --> org{"An organizer of this event?"}
-    org -- no --> forbid["403, answered before any lookup"]
-    org -- yes --> answer["Answer"]
-    kind -- "a project to score" --> assigned{"In this judge's own assignments?"}
-    assigned -- no --> nf["404, the same as a project<br/>that doesn't exist"]
-    assigned -- yes --> card["Show the scorecard<br/>(the track is checked again<br/>before a score is saved)"]
-    kind -- "their own queue or scores" --> own["Rows where judge = the signed-in user"]
+flowchart LR
+    q(["A judge asks for"]) -- "another judge's scores" --> forbid["403, before any lookup"]
+    q -- "a project outside their queue" --> nf["404, like a missing id"]
+    q -- "a project in their queue" --> card["The scorecard"]
+    q -- "their own scores" --> own["Only their own rows"]
 ```
 
 The rules, in full:
@@ -366,20 +350,16 @@ The POST endpoint is exempt from Django's CSRF token, because API clients can't 
 
 The order of the checks matters for honesty:
 
-```mermaid
-flowchart TD
-    req(["POST a submission"]) --> a{"Signed in?"}
-    a -- no --> e401["401 not_signed_in"]
-    a -- yes --> b{"JSON, from this site?"}
-    b -- no --> e415["415 or 403 cross_origin<br/>or 400 invalid_json"]
-    b -- yes --> c{"Before the deadline?"}
-    c -- no --> e403["403 submissions_closed"]
-    c -- yes --> d{"On a team?"}
-    d -- no --> e403t["403 no_team"]
-    d -- yes --> f{"Fields valid?"}
-    f -- no --> e400["400 with the fields"]
-    f -- yes --> ok["200 or 201, saved"]
-```
+| Order | Check | If it fails |
+| --- | --- | --- |
+| 1 | Signed in? | `401 not_signed_in` |
+| 2 | Does the event exist? | `404 no_such_event` |
+| 3 | A JSON body, from this site? | `415`, `403 cross_origin` or `400 invalid_json` |
+| 4 | **Before the deadline?** | `403 submissions_closed` |
+| 5 | On a team in this event? | `403 no_team` |
+| 6 | Are the fields valid? | `400`, listing the fields |
+
+If every check passes, the project is saved (`200`, or `201` the first time).
 
 A late request is refused as late, whatever else is wrong with it. That's why the acceptance checker's probe gets `403 submissions_closed`, not a CSRF or validation error.
 
@@ -388,14 +368,8 @@ A late request is refused as late, whatever else is wrong with it. That's why th
 **In short: organizers set a rubric and add judges; the engine assigns projects fairly; judges score only what they're given; the ranking is recomputed from the marks on every request, and an organizer publishes it when it's final.**
 
 ```mermaid
-flowchart TB
-    rubric["Rubric<br/>criteria, weights, one scale"] --> judges["Judges<br/>added or invited,<br/>each with their tracks"]
-    judges --> plan["Plan a batch<br/>a preview, nothing saved"]
-    plan --> save["Save the batch<br/>re-planned in a transaction<br/>with the same seed"]
-    save --> queue["Each judge's queue"]
-    queue --> score["Scorecard<br/>draft or submitted,<br/>every save kept"]
-    score --> results["Results<br/>normalized and ranked<br/>on every request"]
-    results --> publish["Publish<br/>judging closes"]
+flowchart LR
+    rubric["Rubric"] --> judges["Judges"] --> batch["Plan and save<br/>a batch"] --> score["Judges score"] --> results["Results,<br/>computed live"] --> publish["Publish"]
 ```
 
 The judging module follows the same pattern as submissions: the rules live in services, views stay thin, and nothing derived is stored.
@@ -413,18 +387,13 @@ JUDGING.md explains the methods and the evidence behind them.
 **In short: who a voter is depends on the access mode the organizer chose. Whoever they are, the same service checks their eligibility, the voting window and the ballot's budget, and nobody but organizers sees a number until an organizer publishes.**
 
 ```mermaid
-flowchart TD
-    v(["A voter opens the ballot"]) --> mode{"The vote's access mode"}
-    mode -- "open link" --> link["The link's secret token is checked,<br/>and a ballot key kept in the session"]
-    mode -- "email" --> email["A one-time link to the address,<br/>the confirmed address kept in the session"]
-    mode -- "signed in" --> acct["The account"]
-    link --> elig
-    email --> elig
-    acct --> elig{"Eligible?<br/>not an organizer or admin,<br/>not their own team's project"}
-    elig -- no --> refuse["Refused"]
-    elig -- yes --> ballot["The ballot, in this voter's own shuffled order"]
-    ballot --> save["save_ballot: window, budget<br/>and ceiling checked on the server"]
-    save --> tally["The count: computed on every request,<br/>shown only when allowed"]
+flowchart LR
+    link["Open link:<br/>a token in the link"] --> who
+    email["Email:<br/>a confirmed address"] --> who
+    account["Signed in:<br/>the account"] --> who
+    who{"Eligible?"} -- no --> refused["Refused"]
+    who -- yes --> save["save_ballot:<br/>window, budget, ceiling"]
+    save --> count["The count,<br/>shown only when allowed"]
 ```
 
 * **Saving.** `voting/services.save_ballot` opens a transaction, re-reads the event and its voting settings, checks the voting window with the server clock (`events/deadline.assert_voting_open`), checks eligibility, validates the ballot against the method (`voting/method.check`), then replaces the ballot's lines. The ballot page and `/api/events/<slug>/ballot` both go through it.
@@ -461,14 +430,12 @@ Teams see their own history on the team and submission pages. `events/models.tea
 **In short: the portal refuses what is clearly a script and flags what might be cheating, for a person to judge. Every limit lives in one table, and every organizer decision needs a reason and is logged.**
 
 ```mermaid
-flowchart TB
-    act["A write: sign-in, sign-up,<br/>ballot, comment, score,<br/>voting link, project save"] --> limit{"Over its rate limit?"}
-    limit -- yes --> refused["Refused: 429 or a message,<br/>logged once per burst"]
-    limit -- no --> write["The transaction and the write"]
-    write --> page["The Integrity page runs<br/>the detectors when it opens"]
-    page --> flags["Flags, each with its reason"]
-    flags --> decide["An organizer decides,<br/>with a reason, reversibly"]
-    decide --> log["The activity log"]
+flowchart LR
+    write["A write"] --> limit{"Over its<br/>rate limit?"}
+    limit -- yes --> refused["Refused, logged<br/>once per burst"]
+    limit -- no --> saved["Saved"]
+    saved --> flags["Integrity page:<br/>flags with reasons"]
+    flags --> decide["An organizer decides,<br/>with a reason"]
 ```
 
 * **Limits.** Every write path checks its limit from `integrity/limits.LIMITS` before its transaction opens (otherwise the refusal's audit line would be rolled back with it). Where the model already records the action (comments, score revisions, email links, ballots), the caller passes that count; otherwise `Throttle` rows are counted. `note_refusal` writes one `rate.limited` activity line per key per window, so a script hammering an endpoint leaves one readable line, not thousands.
@@ -546,19 +513,13 @@ sequenceDiagram
 **In short: a certificate or judge's record is a small JSON statement signed with the portal's Ed25519 key. Anyone with the public key can check it later, offline, even when the portal is long gone.**
 
 ```mermaid
-flowchart TB
-    subgraph issue["Issuing, in the portal"]
-        what["Who, what, which event,<br/>when, a code"] --> canon["Canonical JSON<br/>sorted keys, no spaces, UTF-8"]
-        canon --> sign["Ed25519 signature<br/>with the key in /data"]
-        sign --> rec["Record<br/>payload + signature"]
-    end
-    rec --> pdf["PDF and printable page"]
-    rec --> file["Signed .json file"]
-    rec --> online["/verify/ on the portal,<br/>which also knows about revocations"]
-    subgraph check["Checking, anywhere"]
-        file --> verify["records/verify.py<br/>+ the public key,<br/>no Django, no network"]
-        verify --> answer["Genuine or not"]
-    end
+flowchart LR
+    payload["Payload: who, what,<br/>when, a code"] --> sign["Canonical JSON,<br/>signed with Ed25519"]
+    sign --> record["Record"]
+    record --> pdf["PDF and page"]
+    record --> file["Signed .json"]
+    file --> verify["verify.py + public key:<br/>genuine or not, offline"]
+    record --> portal["/verify/ on the portal:<br/>also knows revocations"]
 ```
 
 * **What a record is.** A statement frozen when it's issued: `Record.payload` is the exact JSON that was signed (who, what, which event, when, a code), and `signature` is Ed25519 over that JSON encoded canonically (sorted keys, no spaces, UTF-8).
@@ -621,15 +582,12 @@ sequenceDiagram
 **In short: an export is built from the database on request and never contains secrets. An import always makes a new, unpublished event, and is previewed first by running the whole import and rolling it back.**
 
 ```mermaid
-flowchart TD
-    up["An organizer uploads fixtures.json,<br/>shipshape.json or a .zip"] --> run1["Run the whole import<br/>inside a transaction"]
-    run1 --> report["Write the report: what would be added,<br/>and every exception"]
-    report --> rb["Roll everything back<br/>(images are counted, not written)"]
-    rb --> preview["Show the preview"]
-    preview --> choice{"Confirm?"}
-    choice -- no --> nothing["Nothing changed"]
-    choice -- yes --> run2["Run the same import again,<br/>and commit"]
-    run2 --> newevent["A new, unpublished event,<br/>with the importer as its organizer"]
+flowchart LR
+    upload["Upload a file"] --> preview["Run the whole import,<br/>report, roll back"]
+    preview --> confirm{"Confirm?"}
+    confirm -- yes --> commit["Run it again,<br/>and commit"]
+    confirm -- no --> nothing["Nothing changed"]
+    commit --> newevent["A new, unpublished event"]
 ```
 
 * **Exports.** Built from the database on request; nothing is cached. `export.fixture` writes the DOGFOOD shape (records keep their `external_id`, and ones made here get ids like `prj_<pk>`), so the fixture event exports back to `fixtures.json`. `export.archive` writes `shipshape.json` (format `shipshape-archive`, version 1): every row an organizer can see in the console, people by email, and nothing secret (no password hashes, tokens, webhook secrets or the signing key).
@@ -680,6 +638,32 @@ With `DEMO_MODE=1` (the default in `docker-compose.yml`) it also creates:
 * the fixed session rows whose cookies the acceptance checker uses (in `.dogfood.toml`).
 
 With demo mode off it removes those session rows again. Every seeded account shares one password hash, so the first boot takes about two seconds instead of a minute.
+
+## Configuration
+
+**In short: everything is set with environment variables. `docker-compose.yml` sets the ones the demo needs; add others under `environment:` there.**
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DEMO_MODE` | off (on in compose) | Seeds the demo accounts, the demo event, the top-up batch and the checker's session cookies, and shows the one-click sign-in buttons |
+| `DEMO_PASSWORD` | `dogfood-demo` | The password of every seeded account in demo mode |
+| `PORTAL_PORT` | 8080 | The host port docker compose publishes the portal on |
+| `DATA_DIR` | `src/data` (`/data` in the container) | Where the SQLite database, uploads and generated keys live |
+| `FIXTURES_PATH` | `src/fixtures.json` (`/app/fixtures.json` in the container) | The fixture file the seed loads |
+| `SECRET_KEY` | generated once per install, kept in `DATA_DIR` | Set it to pin the key yourself |
+| `ALLOWED_HOSTS` | localhost names | Host names the portal answers to, comma separated |
+| `PORTAL_URL` | `http://localhost:<PORTAL_PORT>` in compose | The address printed on boot and used in links |
+| `COOKIE_SECURE` | off | Turn on when the portal is served over HTTPS |
+| `WEB_CONCURRENCY` | 3 | Number of gunicorn web workers |
+| `EMAIL_HOST` | not set | SMTP server for email-gated voting links. Not set: messages are written to `DATA_DIR/outbox` |
+| `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` | 587, empty, empty, on | The rest of the SMTP settings |
+| `DEFAULT_FROM_EMAIL` | `Shipshape <no-reply@shipshape.localhost>` | The sender of those emails |
+| `RECORD_SIGNING_KEY` | generated once per install, kept in `DATA_DIR` | 64 hex characters to pin the Ed25519 key that signs certificates, so a reinstall keeps the key you published |
+| `WEBHOOK_ALLOW_LOCAL` | on in demo mode, else off | Lets webhooks go to loopback addresses (the built-in test receiver) |
+| `SELF_URL` | `http://127.0.0.1:<PORT>` in the container | How the portal reaches itself, for the built-in receiver |
+| `WEBHOOK_WORKER` | 1 in the container | Sends webhook deliveries from a background thread in each web process. Elsewhere, run `python src/manage.py deliver_webhooks --loop` |
+
+For a real event, turn `DEMO_MODE` off: the fixed session cookies, the shared password and the one-click sign-in exist only so the checker and the judges can get in without signing up. Then create the first admin with `docker compose exec portal python manage.py createsuperuser`.
 
 ## Storage
 

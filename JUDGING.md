@@ -37,29 +37,18 @@ The algorithms live in [src/judging/engine.py](src/judging/engine.py): pure stan
 **In short: every project gets three reviews from judges in its own track, chosen so no judge carries more than their share. Judges score it on the organizer's weighted rubric. Each judge's marks are then read against that judge's own habits, so a harsh or generous judge can't decide a project's fate by luck of the draw. Separately, the community votes with a limited budget of credits, so a group of friends can't take over. Nothing is public until an organizer has reviewed it and pressed Publish.**
 
 ```mermaid
-flowchart TB
-    setup["<b>Before the deadline, organizers set up</b><br/>the rubric: criteria and weights<br/>the judges, with their tracks<br/>the community vote: access, method, dates"]
-    deadline(["The deadline: projects are final"])
-    subgraph judgingflow["Judging (sections 2 to 7)"]
-        assign["Assignment<br/>3 reviews a project,<br/>balanced, in-track"]
-        score["Scoring<br/>on the rubric"]
-        norm["Normalization<br/>each judge against<br/>their own habits"]
-        rank["Ranking"]
-        assign --> score --> norm --> rank
-    end
-    subgraph communityflow["Community vote (section 10)"]
-        ballots["Ballots<br/>quadratic, capped,<br/>shuffled per voter"]
-        count["Count<br/>hidden until published"]
-        ballots --> count
-    end
-    review["Integrity review (section 8)<br/>flags, decisions with reasons"]
-    publish(["Organizers publish:<br/>the results page"])
-    setup --> deadline
+flowchart LR
+    setup["<b>Set up</b><br/>rubric, judges,<br/>the vote"] --> deadline(["The deadline"])
     deadline --> assign
     deadline --> ballots
-    rank --> publish
-    count --> review
-    review --> publish
+    subgraph judgingflow["Judging (sections 2 to 7)"]
+        assign["Assign"] --> score["Score"] --> norm["Normalize"] --> rank["Rank"]
+    end
+    subgraph communityflow["Community vote (section 10)"]
+        ballots["Ballots"] --> count["Count"]
+    end
+    rank --> publish(["Publish"])
+    count --> review["Integrity<br/>review"] --> publish
 ```
 
 The words this document uses:
@@ -136,17 +125,13 @@ The same algorithm as a picture:
 
 ```mermaid
 flowchart TD
-    start(["A batch: the projects and judges in scope"]) --> shuffle1["Shuffle the projects with the batch's seed"]
-    shuffle1 --> next{"Another project?"}
-    next -- "none left" --> done(["Done: show the preview, or save it"])
-    next -- yes --> need["How many more reviews does it need?<br/>the target minus the reviews it has"]
-    need --> pool["Eligible judges: in its track or floaters,<br/>no conflict, not already reviewing it"]
-    pool --> shuffle2["Shuffle them, then sort by current load<br/>(lightest first, ties stay random)"]
-    shuffle2 --> take["Give the project to the first ones needed,<br/>and add one to each one's load"]
-    take --> short{"Were there enough?"}
-    short -- yes --> next
-    short -- no --> record["Record a shortfall for the organizer"]
-    record --> next
+    start(["Shuffle the batch's projects"]) --> next{"Next project?"}
+    next -- "none left" --> done(["Preview, or save"])
+    next -- yes --> pool["Eligible judges: its track,<br/>no conflict, not already on it"]
+    pool --> pick["Shuffle them, sort by load,<br/>take the lightest"]
+    pick --> enough{"Enough?"}
+    enough -- yes --> next
+    enough -- no --> shortfall["Record a shortfall"] --> next
 ```
 
 In plain words: projects are taken in a random order, and each one goes to the eligible judges who currently have the least work, with ties broken at random. Because every pick goes to whoever is least loaded, nobody ends up with far more reviews than anyone else, and because both orders are random, neither submitting early nor being listed first changes who reviews what.
@@ -225,17 +210,11 @@ Two consequences matter:
 
 For display, a z-score is mapped back onto the familiar scale: `display = μ_pop + z · σ_pop`.
 
-The whole calculation, step by step:
+The whole calculation, step by step. A z-score is how far above or below that judge's own average a mark is, measured in that judge's spread; for display, the mean z is mapped back onto the familiar scale (everyone's average + z × everyone's spread).
 
 ```mermaid
-flowchart TB
-    marks["Each judge's marks for each project"] --> weighted["One weighted mark per judge and project<br/>(section 3)"]
-    weighted --> habits["Each judge's own average and spread,<br/>over every project they scored"]
-    habits --> shrink["Shrink each judge's spread toward everyone's,<br/>more for judges with few scores (κ)"]
-    shrink --> z["A z-score for each mark:<br/>how far above or below that judge's<br/>own average, in their spread"]
-    z --> mean["A project's score:<br/>the mean of its z-scores"]
-    mean --> display["Shown on the familiar scale:<br/>everyone's average + z × everyone's spread"]
-    mean --> rank["Ranked, equal scores sharing a place"]
+flowchart LR
+    marks["Weighted marks"] --> habits["Each judge's<br/>average and spread"] --> shrink["Spread shrunk<br/>toward everyone's (κ)"] --> z["z per mark,<br/>mean per project"] --> rank["Rank"]
 ```
 
 [DATA-MODEL.md](DATA-MODEL.md#one-project-followed-through-the-tables) follows one fixture project, Glass Signal, through these steps with its real marks: a raw average of 3.44 (23rd), and after normalization 22nd, because one of its three marks was low for the judge who gave it.
@@ -385,6 +364,7 @@ In the organizer console's own **CSV exports** tab (the files cover every stage,
 | History | `score-history.csv` | every save of every score |
 | Community vote | `community-votes.csv` | project: rank, votes, backers, credits spent, share |
 | Community vote | `ballots.csv` | line of a ballot: kind, voter, when, project, votes, a short network hash, whether it's counted, why it was left out, and its warning signs |
+| Certificates | `certificates.csv` | record issued: who, what, its code, and whether it's revoked |
 | Community | `comments.csv` | comment, including removed ones, who removed them and why |
 | Audit | `audit-log.csv` | activity log entry, including refused late edits |
 
@@ -468,15 +448,11 @@ Judging keeps its own guarantees on top:
 
 Judges aren't the only audience. T3 asks for a community vote "with configurable access: open link, email-gated, or authenticated", or "something better than one-person-one-vote, if you can defend it", naming quadratic voting. This section is the defence, with the numbers. The code is in `src/voting/`: `method.py` (the maths and the simulation, plain Python), `services.py` (every rule), `results.py` (the count), `views.py` and `api.py`.
 
-The life of a community vote:
+The life of a community vote. An organizer sets the access mode, method, credits, ceiling and closing time; voting opens at the deadline (or later), so everyone votes on final projects; the rules lock as soon as the first ballot is in; it closes at its closing time or when an organizer closes it early; and the count becomes public only when an organizer has reviewed the flagged ballots and pressed Publish.
 
 ```mermaid
-flowchart TB
-    setup["An organizer sets it up<br/>access mode, method, credits,<br/>ceiling, closing time"] --> opens["It opens at the deadline, or later,<br/>so everyone votes on final projects"]
-    opens --> voting["People vote. The rules lock<br/>as soon as the first ballot is in"]
-    voting --> closes["It closes at its closing time,<br/>or when an organizer closes it early"]
-    closes --> review["An organizer reviews the flagged ballots<br/>and leaves out any that don't count"]
-    review --> publish["Publish: the count becomes public"]
+flowchart LR
+    setup["Set up"] --> opens["Opens at<br/>the deadline"] --> voting["People vote<br/>(rules lock)"] --> closes["Closes"] --> review["Organizer<br/>reviews"] --> publish["Publish"]
 ```
 
 ### 10.1 Who can vote: three access modes
@@ -626,15 +602,15 @@ At a glance, counting the attacks in 11.3 (43 of them):
 
 "Open" includes attacks that are slowed or flagged but still work (SY3, SY4, SY5) and ones no software could see (vote buying, judges talking). The defences are layered, from the first thing a request meets to the last word, which is a person's:
 
-```mermaid
-flowchart TB
-    l1["1. Rate limits<br/>scripts refused, one log line per burst"] --> l2["2. Identity rules<br/>one ballot per account or inbox,<br/>staff can't compete or vote"]
-    l2 --> l3["3. Time windows<br/>the server's clock, inside the transaction"]
-    l3 --> l4["4. Isolation<br/>hidden things answer 404,<br/>a peer's scores 403"]
-    l4 --> l5["5. The methods themselves<br/>normalization, the vote ceiling"]
-    l5 --> l6["6. Detection<br/>flags with reasons on the Integrity page"]
-    l6 --> l7["7. People<br/>an organizer reviews before publishing,<br/>and every action is logged"]
-```
+| Layer | What it does |
+| --- | --- |
+| 1. Rate limits | Refuse scripts, with one log line per burst |
+| 2. Identity rules | One ballot per account or inbox; staff can't compete or vote |
+| 3. Time windows | Judged by the server's clock, inside the transaction |
+| 4. Isolation | Hidden things answer 404, a peer's scores 403 |
+| 5. The methods themselves | Normalization, and the vote's ceiling |
+| 6. Detection | Flags with reasons on the Integrity page |
+| 7. People | An organizer reviews before publishing, and every action is logged |
 
 The words used for each outcome:
 
