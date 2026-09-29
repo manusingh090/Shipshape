@@ -2,35 +2,87 @@
 
 Shipshape is a hackathon portal that runs on one laptop with the network off. People sign up, form teams through invite links, and hand in projects they can keep editing until the deadline, which the server enforces. Everyone can browse the entries in a public gallery. Organizers invite judges, assign projects to them by batch or by algorithm, have them score against a weighted rubric, and get a ranking that corrects for harsh and generous judges. The community can vote as well, by open link, by email or with an account, using quadratic voting with a ceiling so that a group of friends can't decide the result. When it's over, the organizers publish the results, and every team can see its place.
 
-It was built for the DOGFOOD 2026 hackathon, and this release claims **all four tiers**. The organizers' acceptance checker verifies T1 and T2. It has no checks for T3 or T4, so it lists them as "claimed but not verified":
+It was built for the DOGFOOD 2026 hackathon, and all four tiers are built and tested. `.dogfood.toml` claims **T1 and T2**, the two tiers the organizers' acceptance checker can test, and the checker verifies both:
 
 ```
-claimed T1 T2 T3 T4, verified T1 T2
-note: claimed but not verified: T3 T4
+claimed T1 T2, verified T1 T2
 ```
 
-The checker's complete output is in [acceptance-report.txt](acceptance-report.txt). T3 and T4 are built and tested all the same: the tables in [What it does, tier by tier](#what-it-does-tier-by-tier) say where each of their requirements lives, which tests cover it, and how to try it yourself.
+**T3 and T4 are claimed in this README**, together with two bonus challenges, **the threat model** and **API first**. The checker has no probes for any of them, so each claim comes with its evidence instead: see [What this submission claims](#what-this-submission-claims). The checker's complete output is in [acceptance-report.txt](acceptance-report.txt).
 
 ## Contents
 
-1. [What you need](#what-you-need)
-2. [Quick start](#quick-start)
-3. [What you get after the first boot](#what-you-get-after-the-first-boot)
-4. [A guided tour](#a-guided-tour)
-5. [Checking the tiers yourself](#checking-the-tiers-yourself)
-6. [What it does, tier by tier](#what-it-does-tier-by-tier)
-7. [Who can do what](#who-can-do-what)
-8. [The fixture's awkward cases](#the-fixtures-awkward-cases)
-9. [Bonus challenges](#bonus-challenges)
-10. [Known limitations](#known-limitations)
-11. [Configuration](#configuration)
-12. [Running it without Docker](#running-it-without-docker)
-13. [Tests and other tools](#tests-and-other-tools)
-14. [Troubleshooting](#troubleshooting)
-15. [Frequently asked questions](#frequently-asked-questions)
-16. [Repository layout](#repository-layout)
-17. [The other documents](#the-other-documents)
-18. [License](#license)
+1. [What this submission claims](#what-this-submission-claims)
+2. [How an event runs, in one picture](#how-an-event-runs-in-one-picture)
+3. [What you need](#what-you-need)
+4. [Quick start](#quick-start)
+5. [What you get after the first boot](#what-you-get-after-the-first-boot)
+6. [A guided tour](#a-guided-tour)
+7. [Checking the tiers yourself](#checking-the-tiers-yourself)
+8. [What it does, tier by tier](#what-it-does-tier-by-tier)
+9. [Who can do what](#who-can-do-what)
+10. [The fixture's awkward cases](#the-fixtures-awkward-cases)
+11. [Bonus challenges](#bonus-challenges)
+12. [Known limitations](#known-limitations)
+13. [Configuration](#configuration)
+14. [Running it without Docker](#running-it-without-docker)
+15. [Tests and other tools](#tests-and-other-tools)
+16. [Troubleshooting](#troubleshooting)
+17. [Frequently asked questions](#frequently-asked-questions)
+18. [Glossary](#glossary)
+19. [Repository layout](#repository-layout)
+20. [The other documents](#the-other-documents)
+21. [License](#license)
+
+## What this submission claims
+
+| Claim | Where it's claimed | How to check it |
+| --- | --- | --- |
+| **T1: core** | `.dogfood.toml` and this README | The organizers' checker verifies it. Read [acceptance-report.txt](acceptance-report.txt), or run the checker yourself ([Checking the tiers yourself](#checking-the-tiers-yourself)) |
+| **T2: judging** | `.dogfood.toml` and this README | The checker verifies it too, in the same report |
+| **T3: community** | This README | The [T3 table](#t3-community-claimed-in-this-readme) says where each requirement lives and which tests cover it, and the [guided tour](#a-guided-tour) shows it working. JUDGING.md, section 10, has the method and the evidence |
+| **T4: stretch** | This README | The [T4 table](#t4-stretch-claimed-in-this-readme), the tests it names, and the tour's REST API walkthrough |
+| **Bonus: threat model** | This README | [JUDGING.md, section 11](JUDGING.md#11-threat-model-voting-and-submission-abuse): 43 attacks, what's stopped and what isn't. `python src/manage.py test tests.test_threat_model` runs one test per attack, and `tests/attacks/probe.py` attacks a running portal |
+| **Bonus: API first** | This README | The OpenAPI 3.1 document at `/api/v1/openapi.json` (also committed as `src/api/openapi.json`), the reference at `/api/v1/docs`, and `tests/test_openapi.py`, which checks every answer against the document |
+
+**Why T3 and T4 aren't in `.dogfood.toml`.** The `claimed` list there is what the checker scores, and it can only test T1 and T2. Anything more would show up in its report as "claimed but not verified", and the brief is clear that claiming further than the checker can confirm is the one thing that costs points. So `.dogfood.toml` claims exactly what the checker verifies, and gets a clean result. T3, T4 and the bonus challenges are claimed here instead, where each one can carry its evidence: the feature, the tests that cover it, and a way to try it yourself. The whole test suite (338 tests) passes, and [Tests and other tools](#tests-and-other-tools) says how to run it.
+
+## How an event runs, in one picture
+
+A hackathon in Shipshape moves through four stages, and the portal enforces each change of stage by the server's clock, not by trusting anyone's browser. Every word in bold below is explained in the [Glossary](#glossary).
+
+```mermaid
+flowchart TB
+    subgraph before["1. Before kickoff"]
+        create["An organizer creates the event:<br/>dates, tracks, prizes, form questions"]
+        invite["and adds judges, each with their tracks"]
+        create --> invite
+    end
+    subgraph during["2. From kickoff to the deadline"]
+        teams["Participants form teams<br/>through invite links"]
+        draft["Each team drafts and edits its project"]
+        submit["and submits it before the deadline"]
+        teams --> draft --> submit
+    end
+    subgraph after["3. After the deadline"]
+        gallery["Projects go public in the gallery"]
+        judge["Judges score the projects<br/>assigned to them"]
+        vote["The community votes"]
+    end
+    subgraph results["4. Results"]
+        publish["Organizers review and publish"]
+        certs["Signed certificates and judges' records"]
+        publish --> certs
+    end
+    before --> during --> after --> results
+```
+
+1. **Before kickoff**, an organizer sets up the **event** in the **organizer console**: its dates, its **tracks** (categories), prizes and the questions on the submission form. They add **judges**, each allowed to review certain tracks.
+2. **From kickoff to the deadline**, participants form **teams** by sharing an **invite link**, and each team saves a **draft** of its project, then **submits** it. They can keep editing until the **deadline**. At the deadline everything locks, and a late change is refused and logged.
+3. **After the deadline**, submitted projects appear in the public **gallery**. The organizer **assigns** projects to judges, who score them on the **rubric**; the ranking is **normalized** so that harsh and generous judges count fairly. At the same time the community can vote, with **quadratic voting**, so a loud group of friends can't decide the result.
+4. **Results.** Nothing is public until an organizer has looked at it and pressed **Publish**. Then every team sees its place (and, if the organizers choose, its judges' feedback, without names), and the organizers can issue **certificates** that anyone can check, even after the portal is switched off.
+
+The diagrams in these documents are written in Mermaid, which GitHub and most Markdown previewers draw as pictures; in a plain text editor you'll see their source, which is written to be readable too.
 
 ## What you need
 
@@ -190,7 +242,7 @@ The organizers' checker, `tests/acceptance/run.py`, is included unmodified next 
 
    In PowerShell, write `${PWD}` instead of `$PWD`. In Git Bash on Windows, put `MSYS_NO_PATHCONV=1` in front of the command, and use `$(pwd -W)` for the folder.
 
-Each way should end with `claimed T1 T2 T3 T4, verified T1 T2` and the note `claimed but not verified: T3 T4`, because the checker's probes stop at T2. The seven lines above it are the checks: the gallery is public, a fixture project appears in it, the closed event refuses a late submission, a judge sees their own scores and is refused another judge's, a participant is refused judges' scores, and the CSV export works.
+Each way should end with `claimed T1 T2, verified T1 T2`. The seven lines above it are the checks: the gallery is public, a fixture project appears in it, the closed event refuses a late submission, a judge sees their own scores and is refused another judge's, a participant is refused judges' scores, and the CSV export works.
 
 ## What it does, tier by tier
 
@@ -222,7 +274,10 @@ It's all in the organizer console under **Judging**, and for judges under **Judg
 | Publishing the results | Console, Judging, **Results**: an organizer publishes the judges' ranking once submissions have closed. Publishing ends judging there and then, so the published ranking is final and no score can move under it. Options: share each team's feedback with it (its average mark per criterion and the judges' comments, never who wrote them), and announce the winners at the same time. Everyone who can see the event then gets the **results page** (`/events/<slug>/results/`): the winners, the judges' ranking by track, and the community vote once it's published. A team member also sees their own project's place and, if shared, its feedback. Taking the results down hides them again; moving the judging end date into the future takes them down too. |
 | CSV export at every stage | Teams, projects, judges, assignments, raw scores, normalized scores, final rankings, score history and the audit log, each from the console's **CSV exports** tab or at `/api/events/<slug>/export/<stage>.csv`. Organizers only, and defused against spreadsheet formula injection. |
 
-### T3: community (claimed; the checker has no T3 checks)
+### T3: community (claimed in this README)
+
+The organizers' checker has no T3 checks, so T3 is claimed here rather than in `.dogfood.toml`. Each requirement below names where it lives and how it's tested.
+
 
 [JUDGING.md](JUDGING.md), section 10, has the reasoning and the evidence.
 
@@ -237,7 +292,10 @@ It's all in the organizer console under **Judging**, and for judges under **Judg
 
 Role isolation holds for all of this: a team's own history never shows who judges them, when a judge scored, or a judge's conflict and its reason (those stay in the organizers' activity log).
 
-### T4: stretch (claimed; the checker has no T4 checks)
+### T4: stretch (claimed in this README)
+
+The checker has no T4 checks either, so T4 is claimed here too, with the same kind of evidence.
+
 
 | Requirement | Where it lives |
 | --- | --- |
@@ -277,13 +335,14 @@ Organizers can't edit a team's project. Nobody can edit anything after the deadl
 
 ## Bonus challenges
 
-* **A normalization proof**: JUDGING.md, section 4, with a worked example, a Monte Carlo run over simulated events with a known truth, and the fixture itself explained.
-* **A threat model for voting and submission abuse**: [JUDGING.md, section 11](JUDGING.md#11-threat-model-voting-and-submission-abuse). Sybil votes, ballot stuffing, submission scraping, judge collusion and deadline gaming, attack by attack: what's stopped, what's only capped or flagged, and a plain list of what isn't stopped. Each claim has a test in `tests/test_threat_model.py` (including tests that pin the open gaps, so they can't quietly change), `tests/attacks/probe.py` attacks a running portal over HTTP, and `src/judging/engine.py --collusion` measures what colluding judges gain. Writing it found four holes and a small leak, now fixed.
-* **API first**: every action in the UI is in a documented API with a published OpenAPI 3.1 document: 150 operations (the 138 under `/api/v1/` and the 12 older `/api/` routes the checker uses, each pointing at its v1 twin), every one with its parameters, request body, response schema, errors and who may call it, plus the webhook deliveries. The document is generated from the same declarations that route the requests, so it can't describe an endpoint that doesn't exist, and request bodies of endpoints that validate with a Django form are derived from that form. It's held to the truth: during the test run every answer the API gives is checked against the schema the document publishes (objects may not carry undocumented keys), the tests exercise all 138 endpoints, and the run fails if one is skipped. It passes `openapi-spec-validator` as valid OpenAPI 3.1. Schemathesis, which generates requests from a document and checks the answers against it, was also pointed at a throwaway container: its generated GET requests (about 1,000 before the run was stopped by hand) produced no server error, but the run didn't finish, so it isn't claimed as a pass of its schema checks. ARCHITECTURE.md, "The REST API", explains how it works.
+The brief lists four optional challenges. Two are claimed: the threat model and API first. The pairwise judging mode wasn't attempted. The normalization proof is documented as part of T2's "cross-judge normalization, documented and defended" (JUDGING.md, section 4: a worked example, a Monte Carlo run over simulated events with a known truth, and the fixture itself explained), but it isn't claimed as a separate bonus.
+
+* **A threat model for voting and submission abuse** (claimed): [JUDGING.md, section 11](JUDGING.md#11-threat-model-voting-and-submission-abuse). Sybil votes, ballot stuffing, submission scraping, judge collusion and deadline gaming, attack by attack: what's stopped, what's only capped or flagged, and a plain list of what isn't stopped. Each claim has a test in `tests/test_threat_model.py` (including tests that pin the open gaps, so they can't quietly change), `tests/attacks/probe.py` attacks a running portal over HTTP, and `src/judging/engine.py --collusion` measures what colluding judges gain. Writing it found four holes and a small leak, now fixed.
+* **API first** (claimed): every action in the UI is in a documented API with a published OpenAPI 3.1 document: 150 operations (the 138 under `/api/v1/` and the 12 older `/api/` routes the checker uses, each pointing at its v1 twin), every one with its parameters, request body, response schema, errors and who may call it, plus the webhook deliveries. The document is generated from the same declarations that route the requests, so it can't describe an endpoint that doesn't exist, and request bodies of endpoints that validate with a Django form are derived from that form. It's held to the truth: during the test run every answer the API gives is checked against the schema the document publishes (objects may not carry undocumented keys), the tests exercise all 138 endpoints, and the run fails if one is skipped. It passes `openapi-spec-validator` as valid OpenAPI 3.1. Schemathesis, which generates requests from a document and checks the answers against it, was also pointed at a throwaway container: its generated GET requests (about 1,000 before the run was stopped by hand) produced no server error, but the run didn't finish, so it isn't claimed as a pass of its schema checks. ARCHITECTURE.md, "The REST API", explains how it works.
 
 ## Known limitations
 
-* **The checker can't verify T3 and T4**: it has no probes past T2, so its report lists them as claimed but not verified. The evidence is the test suite and the walkthroughs above.
+* **The checker can't verify T3 and T4**: it has no probes past T2, so they're claimed in this README rather than in `.dogfood.toml`. The evidence is the test suite and the walkthroughs above.
 * Imported certificates aren't re-created: they stay valid with the key that signed them, which the archive includes. Offline verification can't know about a revocation; that needs the portal (or the organizers' word).
 * The anti-abuse checks flag ballots for an organizer to judge. A patient cheat with several real devices, networks and inboxes gets through, and so do colluding judges more often than not (JUDGING.md, 11.5).
 * Email is only used for email-gated voting, and only if `EMAIL_HOST` points at an SMTP server; offline, messages are written to an outbox folder. Password resets aren't built, and judges are invited by link.
@@ -426,7 +485,45 @@ Only email-gated voting sends mail. Without `EMAIL_HOST`, each message is writte
 
 ### Which tier does it reach, without reading the code?
 
-All four are claimed. The organizers' checker verifies T1 and T2: see [acceptance-report.txt](acceptance-report.txt), or run it yourself as described in [Checking the tiers yourself](#checking-the-tiers-yourself). It has no checks for T3 or T4; for those, the tables in [What it does, tier by tier](#what-it-does-tier-by-tier) point to the features and the tests that cover them.
+T1 and T2 are claimed in `.dogfood.toml`, and the organizers' checker verifies both: see [acceptance-report.txt](acceptance-report.txt), or run it yourself as described in [Checking the tiers yourself](#checking-the-tiers-yourself). T3 and T4 are claimed in this README, because the checker has no checks for them; the tables in [What it does, tier by tier](#what-it-does-tier-by-tier) point to the features and the tests that cover them, and [What this submission claims](#what-this-submission-claims) lists every claim in one place.
+
+## Glossary
+
+The words used in the portal and these documents, in plain terms.
+
+| Word | Means |
+| --- | --- |
+| **Event** | One hackathon, with its own dates, tracks, prizes, teams and judges. The portal can hold several |
+| **Kickoff** | When the event starts and teams can begin their projects (`starts_at`) |
+| **Deadline** | When submissions close (`submissions_close_at`). From that instant teams can't change their project or their roster, whichever way they try |
+| **Track** | A category of projects, such as "Climate" or "Developer tools". Each project is filed under one, and judges review only their own tracks |
+| **Team** | The people working on one project. One team per person per event |
+| **Invite link** | The secret address a team shares to let people join. The captain can replace it, which kills the old one |
+| **Draft** | A project that has been saved but not submitted. Only its team and the organizers can see it |
+| **Submitted** | A project that has been handed in. It can still be edited until the deadline, and it's public from the deadline |
+| **Gallery** | The public list of submitted projects, with search and filters |
+| **Duplicate** | A second project from the same team, flagged by an organizer. It's hidden, and its scores don't count |
+| **Organizer** | Someone who runs an event, from its **organizer console** (Organize, then the event). Organizers can't judge or compete |
+| **Admin** | Someone who runs the whole portal: accounts, roles, every event |
+| **Judge** | Someone who scores the projects assigned to them. Judges can't compete, and never see each other's scores |
+| **Floater** | A judge an organizer allows to review any track |
+| **Assignment** | "This judge reviews this project". A judge can open only the projects assigned to them; anything else is "not found" |
+| **Batch** | One run of the assignment engine, over some projects and judges. It's previewed before it's saved, and records a seed so it can be repeated |
+| **Rubric** | What projects are marked on: a few **criteria** (such as functionality, quality and innovation), each with a **weight** saying how much it counts |
+| **Normalization** | Reading each judge's marks against that judge's own habits, so a judge who marks everything low or everything high can't swing the ranking. JUDGING.md, section 4 |
+| **Conflict of interest** | A judge saying they shouldn't review a project (for example, they mentored the team). They're never assigned it |
+| **Community vote** | A vote open to people other than the judges, in one of three **access modes**: anyone with a link, anyone who confirms an email address, or anyone signed in |
+| **Quadratic voting** | Each voter has a budget of credits, and n votes on one project cost n × n credits, so backing many projects is cheap and piling onto one is expensive. Shipshape also caps one ballot at 3 votes a project |
+| **Publish** | An organizer's decision to make results visible. Publishing the judges' results also closes judging, so the ranking can't change afterwards |
+| **Certificate** and **judge's record** | Signed statements (a PDF and a file) that someone took part, won a prize or judged. Anyone with the organizers' public key can check them offline |
+| **Activity log** | The event's audit trail: every change, every refused attempt, every organizer decision, with who and when |
+| **API token** | A key that lets a program use the REST API as you. Only its fingerprint is stored |
+| **Webhook** | An address Shipshape notifies whenever something happens in an event |
+| **Embed** | Showing an event's gallery on another website, with two lines of HTML |
+| **Fixture** | `src/fixtures.json`, the shared sample data every DOGFOOD portal loads |
+| **Demo mode** | `DEMO_MODE=1`, on by default: adds demo accounts with one-click sign-in, a second, open event, and the session cookies the checker uses |
+| **Tier** | The brief's levels: T1 (core), T2 (judging), T3 (community), T4 (stretch) |
+| **Acceptance checker** | The organizers' script, `tests/acceptance/run.py`, which tests a running portal and prints which tiers it verified |
 
 ## Repository layout
 
@@ -455,9 +552,10 @@ tests/                   the test suite (338 tests)
 
 ## The other documents
 
-* [ARCHITECTURE.md](ARCHITECTURE.md): how it's put together and why: the stack, the code layout, where permissions and deadlines are enforced, the API and its OpenAPI document, webhooks, certificates, publishing, the embed, import and export, security and storage.
-* [DATA-MODEL.md](DATA-MODEL.md): every table, the rules the database enforces on its own, and how `fixtures.json` maps in.
-* [JUDGING.md](JUDGING.md): how judges are assigned, how scores are weighted and normalized (with the proof), how isolation is enforced, how the community vote works and why, and the threat model.
+* [ARCHITECTURE.md](ARCHITECTURE.md): how it's put together and why, with diagrams: the container and how it's built offline, the code layout, how a request travels through the code, where permissions and deadlines are enforced, the API and its OpenAPI document, webhooks, certificates, publishing, the embed, import and export, security and storage.
+* [DATA-MODEL.md](DATA-MODEL.md): every table, with a diagram per area, how each kind of row changes over its life, one fixture project followed through every table it touches, the rules the database enforces on its own, and how `fixtures.json` maps in.
+* [JUDGING.md](JUDGING.md): how judges are assigned, how scores are weighted and normalized (with the proof), how isolation is enforced, how the community vote works and why, and the threat model. It starts with a one-page overview and a list of its terms.
+* [src/vendor/README.md](src/vendor/README.md): the third-party files that let the build run offline, with their sources, checksums and licenses.
 
 ## License
 

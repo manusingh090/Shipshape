@@ -4,6 +4,7 @@ This document explains, and defends, how Shipshape judges projects. It's written
 
 **Contents**
 
+* [At a glance](#at-a-glance)
 * [1. What T2 asks for, as engineering problems](#1-what-t2-asks-for-as-engineering-problems)
 * [2. Judges, and who reviews what](#2-judges-and-who-reviews-what)
 * [3. Weighted rubric scoring](#3-weighted-rubric-scoring)
@@ -30,6 +31,54 @@ python tests/attacks/probe.py .dogfood.toml             # threat model: attacks 
 ```
 
 The algorithms live in [src/judging/engine.py](src/judging/engine.py): pure standard library, no Django, ported from the reference `scoring_engine.py` that came with the brief. Everything that touches the database is in `src/judging/`: `access.py` (isolation), `assigning.py`, `scoring.py`, `results.py`, `exports.py`, `staff.py`. Other code paths below are relative to `src/`.
+
+## At a glance
+
+**In short: every project gets three reviews from judges in its own track, chosen so no judge carries more than their share. Judges score it on the organizer's weighted rubric. Each judge's marks are then read against that judge's own habits, so a harsh or generous judge can't decide a project's fate by luck of the draw. Separately, the community votes with a limited budget of credits, so a group of friends can't take over. Nothing is public until an organizer has reviewed it and pressed Publish.**
+
+```mermaid
+flowchart TB
+    setup["<b>Before the deadline, organizers set up</b><br/>the rubric: criteria and weights<br/>the judges, with their tracks<br/>the community vote: access, method, dates"]
+    deadline(["The deadline: projects are final"])
+    subgraph judgingflow["Judging (sections 2 to 7)"]
+        assign["Assignment<br/>3 reviews a project,<br/>balanced, in-track"]
+        score["Scoring<br/>on the rubric"]
+        norm["Normalization<br/>each judge against<br/>their own habits"]
+        rank["Ranking"]
+        assign --> score --> norm --> rank
+    end
+    subgraph communityflow["Community vote (section 10)"]
+        ballots["Ballots<br/>quadratic, capped,<br/>shuffled per voter"]
+        count["Count<br/>hidden until published"]
+        ballots --> count
+    end
+    review["Integrity review (section 8)<br/>flags, decisions with reasons"]
+    publish(["Organizers publish:<br/>the results page"])
+    setup --> deadline
+    deadline --> assign
+    deadline --> ballots
+    rank --> publish
+    count --> review
+    review --> publish
+```
+
+The words this document uses:
+
+| Word | Means |
+| --- | --- |
+| Track | A category of projects, such as "Climate". Judges review only their own tracks |
+| Floater | A judge an organizer allows to review any track |
+| Assignment | "This judge reviews this project". Judges see only their assignments |
+| Batch | One run of the assignment engine over some projects and judges, with a recorded seed |
+| Rubric, criterion, weight | What a project is marked on (functionality, quality, innovation...), and how much each counts |
+| Weighted mark | One judge's marks for one project combined into a single number with the weights |
+| Normalization | Reading each weighted mark against the habits of the judge who gave it (section 4) |
+| z-score | How far above or below their own average a judge's mark is, measured in that judge's usual spread |
+| Kappa (κ) | How strongly a judge with few scores is treated as typical (section 4.2) |
+| Informative review | A review from a judge with at least two scores that vary, so it carries real signal |
+| Quadratic voting | Putting n votes on one project costs n × n credits from a fixed budget (section 10.2) |
+| Ceiling | The most votes one ballot may give one project |
+| Publish | An organizer's decision that makes results visible; it also closes judging |
 
 ## 1. What T2 asks for, as engineering problems
 
@@ -83,6 +132,25 @@ assign_judges(projects, judges, k, seed, needed, initial_load):
         if fewer than `want`: record a shortfall (never silently drop it)
 ```
 
+The same algorithm as a picture:
+
+```mermaid
+flowchart TD
+    start(["A batch: the projects and judges in scope"]) --> shuffle1["Shuffle the projects with the batch's seed"]
+    shuffle1 --> next{"Another project?"}
+    next -- "none left" --> done(["Done: show the preview, or save it"])
+    next -- yes --> need["How many more reviews does it need?<br/>the target minus the reviews it has"]
+    need --> pool["Eligible judges: in its track or floaters,<br/>no conflict, not already reviewing it"]
+    pool --> shuffle2["Shuffle them, then sort by current load<br/>(lightest first, ties stay random)"]
+    shuffle2 --> take["Give the project to the first ones needed,<br/>and add one to each one's load"]
+    take --> short{"Were there enough?"}
+    short -- yes --> next
+    short -- no --> record["Record a shortfall for the organizer"]
+    record --> next
+```
+
+In plain words: projects are taken in a random order, and each one goes to the eligible judges who currently have the least work, with ties broken at random. Because every pick goes to whoever is least loaded, nobody ends up with far more reviews than anyone else, and because both orders are random, neither submitting early nor being listed first changes who reviews what.
+
 The reference version assigned exactly `k` per project from zero. Shipshape added `needed` and `initial_load` so a second batch tops coverage up instead of starting over, plus floaters. With neither argument it behaves exactly like the reference, down to the random numbers it draws (a test checks this against the reference's published output).
 
 It's greedy, not a global optimum. With single-track judges it keeps every judge in a track within one review of each other; with judges spanning tracks the tests allow two. Cost is O(P · J log J), trivial at hackathon scale. If an event ever needed a provable optimum under tight capacity limits, the problem is min-cost max-flow (source to judge with capacity max_load, judge to project with capacity 1 for eligible pairs, project to sink with capacity k). It isn't needed here, and the greedy version is far easier to audit.
@@ -112,6 +180,8 @@ weighted(judge, project) = Σ w'_i · mark_i
 
 Every criterion shares the event's scale (1 to 5 by default), so the weighted score stays on that scale, which section 4 depends on: normalization assumes every raw score is on one consistent scale.
 
+For example, with weights 2, 1 and 1 for functionality, quality and innovation, the normalized weights are 0.5, 0.25 and 0.25. A judge who marks a project 4, 3 and 5 gives it a weighted mark of 0.5 × 4 + 0.25 × 3 + 0.25 × 5 = 4.0. Weights of 4, 2 and 2 would give exactly the same result, which is why they don't need to add up to anything.
+
 The fixture event's rubric is its three criteria (functionality, quality, innovation) at equal weight, because the file says nothing about weights. An organizer can change that, and the rankings update immediately. For comparison, Devpost's online judging only supports one set of equally weighted criteria, and organizers who want weights have to judge offline ([Devpost help](https://help.devpost.com/article/64-judging-public-voting)). Here weights are part of online judging, and because nothing derived is stored, changing one mid-judging recalculates every ranking without touching a single score.
 
 Rules that keep scores comparable:
@@ -127,6 +197,8 @@ The reference design allowed a rubric per track. Shipshape deliberately uses one
 ### 4.1 The problem
 
 Same rubric, very different judges: one is harsh (everything a 2), one is generous (everything a 4.5), one gives every project the same mark. Each project only sees three of them. A plain average lets the luck of the draw decide a project's fate more than its quality does. "We averaged the scores and hoped" is the answer the brief calls weak.
+
+In plain words: think of two teachers marking the same essays. One never gives more than a 3; the other rarely gives less than a 4. A 3 from the first is praise, and a 4 from the second is a shrug. If an essay happens to be marked by the generous teacher, a plain average flatters it. Normalization reads every mark against the habits of the judge who gave it, so what counts is whether a judge rated this project above or below the way they rate everything else.
 
 ### 4.2 The method: shrinkage z-scores
 
@@ -152,6 +224,21 @@ Two consequences matter:
 * **The single-score judge.** Someone with one score has nothing to compare it with, so it can't be told apart from severity, and it is also neutral (z = 0).
 
 For display, a z-score is mapped back onto the familiar scale: `display = μ_pop + z · σ_pop`.
+
+The whole calculation, step by step:
+
+```mermaid
+flowchart TB
+    marks["Each judge's marks for each project"] --> weighted["One weighted mark per judge and project<br/>(section 3)"]
+    weighted --> habits["Each judge's own average and spread,<br/>over every project they scored"]
+    habits --> shrink["Shrink each judge's spread toward everyone's,<br/>more for judges with few scores (κ)"]
+    shrink --> z["A z-score for each mark:<br/>how far above or below that judge's<br/>own average, in their spread"]
+    z --> mean["A project's score:<br/>the mean of its z-scores"]
+    mean --> display["Shown on the familiar scale:<br/>everyone's average + z × everyone's spread"]
+    mean --> rank["Ranked, equal scores sharing a place"]
+```
+
+[DATA-MODEL.md](DATA-MODEL.md#one-project-followed-through-the-tables) follows one fixture project, Glass Signal, through these steps with its real marks: a raw average of 3.44 (23rd), and after normalization 22nd, because one of its three marks was low for the judge who gave it.
 
 ### 4.3 Why κ = 5: tested, not asserted
 
@@ -253,6 +340,17 @@ Every score is a row `(judge, project, marks, comment, submitted_at)` that can o
 * **A judge never sees other judges' marks or comments**: not on the scoring page, not in their queue, not in the API. Rankings, progress, calibration and exports are organizer-only until an organizer publishes the results.
 * **Publishing is a decision, and it's final.** An organizer publishes the ranking from Judging, Results once submissions have closed; that closes judging, so nothing on the published page can move. Everyone who can see the event gets the results page: winners, the ranking (rank, project, team, track, normalized score, number of reviews) and the community vote once it's out. A team also sees its own place, and if the organizer chose to share feedback, its average mark per criterion and the judges' comments, shuffled and without names. Raw marks, z-scores, calibration and who judged what stay organizer-only.
 * **Nobody who can see every score can also judge** (organizers, admins), and nobody competing can judge their own event.
+
+What each person can see of judging, in one table:
+
+| Judging data | The judge who wrote it | Other judges | The project's team | Organizers | Everyone else |
+| --- | --- | --- | --- | --- | --- |
+| A judge's own marks | yes | no | no (only the averages, below) | yes | no |
+| A judge's comment | yes | no | without the judge's name, if feedback is shared | yes | no |
+| Who reviews which project | their own queue | no | no | yes | no |
+| Raw averages, z-scores, each judge's calibration | no | no | no | yes | no |
+| The ranking | once published | once published | their own place, once published | always | once published |
+| A project's average mark per criterion | no | no | their own project, if feedback is shared | yes | no |
 
 The reference suggested Postgres row-level security as a last line. Shipshape runs on SQLite, which has none, so `judging/access.py` is that layer, and it's tested the way an attacker would probe it: raw requests with another judge's id, another track's project id, a participant's cookie, no cookie at all (`tests/test_judging.py`). The acceptance checker's own probes pass:
 
@@ -370,6 +468,17 @@ Judging keeps its own guarantees on top:
 
 Judges aren't the only audience. T3 asks for a community vote "with configurable access: open link, email-gated, or authenticated", or "something better than one-person-one-vote, if you can defend it", naming quadratic voting. This section is the defence, with the numbers. The code is in `src/voting/`: `method.py` (the maths and the simulation, plain Python), `services.py` (every rule), `results.py` (the count), `views.py` and `api.py`.
 
+The life of a community vote:
+
+```mermaid
+flowchart TB
+    setup["An organizer sets it up<br/>access mode, method, credits,<br/>ceiling, closing time"] --> opens["It opens at the deadline, or later,<br/>so everyone votes on final projects"]
+    opens --> voting["People vote. The rules lock<br/>as soon as the first ballot is in"]
+    voting --> closes["It closes at its closing time,<br/>or when an organizer closes it early"]
+    closes --> review["An organizer reviews the flagged ballots<br/>and leaves out any that don't count"]
+    review --> publish["Publish: the count becomes public"]
+```
+
 ### 10.1 Who can vote: three access modes
 
 The three modes are the ones Devpost for Teams shipped in 2025 ([release notes](https://info.devpost.com/blog/devpost-for-teams-releases-q1-2025)): anyone with the link, email only, or sign-in required. What changes between them is what counts as "one voter".
@@ -394,7 +503,7 @@ Every voter gets a budget of credits (25 by default). Putting *n* votes on one p
 | --- | --- | --- | --- | --- | --- |
 | Credits | 1 | 4 | 9 | 16 | 25 |
 
-So influence grows with the square root of what you spend, which is how the brief describes it. Caring a lot is allowed but expensive: backing five projects with a vote each costs 5 credits, backing one project with five votes costs all 25. DoraHacks, who have run quadratic votes at hackathons since 2020, argue that it lets a niche project that matters a lot to some people compete, where a plain vote can turn into a popularity contest ([DoraHacks](https://dorahacks.io/blog/news/qf-retrospective/)).
+So influence grows with the square root of what you spend, which is how the brief describes it. Caring a lot is allowed but expensive: backing five projects with a vote each costs 5 credits, backing one project with five votes costs all 25. A typical ballot with the defaults (25 credits, at most 3 votes a project) might give 3 votes to a favourite (9 credits), 2 votes each to two more (4 + 4 credits) and 1 vote each to eight others (8 credits): 25 credits, spread over eleven projects. The favourite counts three times as much as a casual pick. Even spending all 25 credits on it would buy only 5 votes, and the ceiling stops it at 3. DoraHacks, who have run quadratic votes at hackathons since 2020, argue that it lets a niche project that matters a lot to some people compete, where a plain vote can turn into a popularity contest ([DoraHacks](https://dorahacks.io/blog/news/qf-retrospective/)).
 
 On top of that, **one ballot can give one project at most 3 votes** (9 credits). The ceiling is our addition, and section 10.3 is why. The count is the sum of votes per project. Ties go to the project more people backed; anything still level shares a place (competition ranking, as in judging). Only projects listed in the gallery count: if an organizer flags one as a duplicate after people voted for it, those votes drop out of the count but stay in the ballots export.
 
@@ -502,6 +611,29 @@ python src/manage.py test tests.test_threat_model   # one test per attack id bel
 python tests/attacks/probe.py .dogfood.toml         # attacks a running portal over HTTP (use a throwaway container: it changes state)
 python src/judging/engine.py --trials 1000 --collusion   # what colluding judges gain, and how often it's flagged
 python src/voting/method.py --trials 1000           # what a bloc of real voters gains under each voting method (10.3)
+```
+
+At a glance, counting the attacks in 11.3 (43 of them):
+
+| Family | Attacks | Stopped | Capped or flagged | Logged only | Open |
+| --- | --- | --- | --- | --- | --- |
+| Sybil votes (SY) | 9 | 5 | 1 | 0 | 3 |
+| Ballot stuffing (BS) | 9 | 7 | 0 | 0 | 2 |
+| Submission scraping (SC) | 8 | 7 | 0 | 0 | 1 |
+| Judge collusion (JC) | 9 | 2 | 2 | 1 | 4 |
+| Deadline gaming (DG) | 8 | 7 | 0 | 0 | 1 |
+| **Total** | **43** | **28** | **3** | **1** | **11** |
+
+"Open" includes attacks that are slowed or flagged but still work (SY3, SY4, SY5) and ones no software could see (vote buying, judges talking). The defences are layered, from the first thing a request meets to the last word, which is a person's:
+
+```mermaid
+flowchart TB
+    l1["1. Rate limits<br/>scripts refused, one log line per burst"] --> l2["2. Identity rules<br/>one ballot per account or inbox,<br/>staff can't compete or vote"]
+    l2 --> l3["3. Time windows<br/>the server's clock, inside the transaction"]
+    l3 --> l4["4. Isolation<br/>hidden things answer 404,<br/>a peer's scores 403"]
+    l4 --> l5["5. The methods themselves<br/>normalization, the vote ceiling"]
+    l5 --> l6["6. Detection<br/>flags with reasons on the Integrity page"]
+    l6 --> l7["7. People<br/>an organizer reviews before publishing,<br/>and every action is logged"]
 ```
 
 The words used for each outcome:
