@@ -1,0 +1,63 @@
+{% load ui %}
+<section class="block" id="comments">
+  <header class="block-head">
+    <h2>Comments</h2>
+    {% if comments %}<span class="small muted">{{ comments|length }}</span>{% endif %}
+  </header>
+  {% if comments %}
+  <ol class="comments">
+    {% for row in comments %}{% with c=row.comment %}
+    <li class="comment{% if c.removed_at %} is-removed{% endif %}" id="comment-{{ c.pk }}">
+      {% if row.hidden %}
+        <p class="small muted">A comment was removed by the organizers.</p>
+      {% else %}
+        <header class="comment-head">
+          <span class="avatar" aria-hidden="true">{{ c.author.initials }}</span>
+          <strong>{{ c.author.display_name }}</strong>
+          {% if row.badge %}<span class="stamp stamp-badge">{{ row.badge }}</span>{% endif %}
+          {% if row.mine and not c.removed_at %}<span class="stamp stamp-you">You</span>{% endif %}
+          <time class="comment-time" datetime="{{ c.created_at|iso }}" data-local>{% when c.created_at event %}</time>
+          {% if row.mine and not c.removed_at %}
+          <form class="comment-own" method="post" action="{% url 'projects:comment_remove' project.pk c.pk %}" data-confirm="Remove your comment? It disappears for everyone.">
+            {% csrf_token %}<button class="btn btn-ghost btn-small" type="submit">Remove my comment</button>
+          </form>
+          {% endif %}
+        </header>
+        <div class="prose comment-body">{{ c.body|markdown }}</div>
+        {% if c.removed_at %}
+          <p class="small removed-note">Removed {% when c.removed_at event %} by {{ c.removed_by.display_name }}: {{ c.removal_reason }}. Only organizers see this.</p>
+        {% elif not row.mine and viewer.is_organizer %}
+          <details class="reveal">
+            <summary class="small">Remove this comment</summary>
+            <form method="post" action="{% url 'projects:comment_remove' project.pk c.pk %}" class="inline-form">
+              {% csrf_token %}
+              <label class="sr-only" for="reason-{{ c.pk }}">Reason</label>
+              <input id="reason-{{ c.pk }}" type="text" name="reason" maxlength="200" required placeholder="Why, for the activity log">
+              <button class="btn btn-danger btn-small" type="submit">Remove</button>
+            </form>
+          </details>
+        {% endif %}
+      {% endif %}
+    </li>
+    {% endwith %}{% endfor %}
+  </ol>
+  {% elif comments_open %}
+  <p class="muted">No comments yet.</p>
+  {% endif %}
+
+  {% if not comment_block %}
+  <form method="post" action="{% url 'projects:comment_add' project.pk %}" class="comment-form">
+    {% csrf_token %}
+    <div class="field">
+      <label for="comment-body">Add a comment</label>
+      <textarea id="comment-body" name="body" rows="4" maxlength="{{ comment_max }}" required>{{ comment_draft }}</textarea>
+      <div class="help">Public, under your name. Links, **bold** and _italic_ work. Be kind; organizers can remove comments.</div>
+    </div>
+    <button class="btn btn-small" type="submit">Post comment</button>
+  </form>
+  {% elif comments_open %}
+  <p class="small muted">{% if not viewer.signed_in %}<a href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}%23comments">Sign in</a> to comment.{% else %}{{ comment_block }}{% endif %}</p>
+  {% elif project.is_listed %}
+  <p class="small muted">{{ comment_block }}</p>
+  {% endif %}
+</section>

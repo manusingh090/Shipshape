@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}New hackathon{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{% url 'events:organize' %}">Organize</a></p>
+  <h1 class="display">Set up a hackathon</h1>
+  <p class="lede">The dates are the rules: nobody can edit a project before kickoff or after the deadline. You can change everything here later, and date changes are logged.</p>
+</header>
+<div class="layout-2">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "events/_event_form_fields.html" %}
+    <section class="form-section">
+      <h2 class="form-section-title">Tracks</h2>
+      {% include "_field.html" with field=form.tracks_text %}
+    </section>
+    <div class="form-actions">
+      <button class="btn" type="submit">Create the event</button>
+      <a href="{% url 'events:organize' %}">Cancel</a>
+    </div>
+  </form>
+  <aside class="side-col">
+    <section class="panel">
+      <h2 class="panel-title">After this</h2>
+      <p>You'll land in the organizer console, where you can:</p>
+      <ul class="small">
+        <li>describe tracks and add prizes,</li>
+        <li>add your own questions to the submission form,</li>
+        <li>invite co-organizers and judges,</li>
+        <li>publish when it's ready.</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+{% endblock %}

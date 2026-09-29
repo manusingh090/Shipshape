@@ -1,0 +1,28 @@
+{% load ui %}
+<header class="console-head">
+  <div>
+    <p class="eyebrow"><a href="{% url 'events:organize' %}">Organize</a> · organizer console</p>
+    <h1 class="display">{{ event.name }}</h1>
+    <p class="meta">{% include "events/_phase_stamp.html" %}&nbsp; Deadline {% when event.submissions_close_at event %}</p>
+  </div>
+  <p class="actions"><a class="btn btn-ghost btn-small" href="{{ event.get_absolute_url }}">Public page</a></p>
+</header>
+<nav class="tabs" aria-label="Organizer sections">
+  <a href="{% url 'events:manage' event.slug %}" {% if section == 'overview' %}aria-current="page"{% endif %}>Overview</a>
+  <a href="{% url 'events:manage_details' event.slug %}" {% if section == 'details' %}aria-current="page"{% endif %}>Details and dates</a>
+  <a href="{% url 'events:manage_tracks' event.slug %}" {% if section == 'tracks' %}aria-current="page"{% endif %}>Tracks</a>
+  <a href="{% url 'events:manage_prizes' event.slug %}" {% if section == 'prizes' %}aria-current="page"{% endif %}>Prizes</a>
+  <a href="{% url 'events:manage_questions' event.slug %}" {% if section == 'questions' %}aria-current="page"{% endif %}>Form questions</a>
+  <a href="{% url 'events:manage_people' event.slug %}" {% if section == 'people' %}aria-current="page"{% endif %}>Organizers</a>
+  <a href="{% url 'events:manage_submissions' event.slug %}" {% if section == 'submissions' %}aria-current="page"{% endif %}>Submissions</a>
+  <a href="{% url 'events:manage_teams' event.slug %}" {% if section == 'teams' %}aria-current="page"{% endif %}>Teams</a>
+  <a href="{% url 'judging:progress' event.slug %}" {% if section == 'judging' %}aria-current="page"{% endif %}>Judging</a>
+  <a href="{% url 'voting:manage' event.slug %}" {% if section == 'voting' %}aria-current="page"{% endif %}>Community vote</a>
+  <a href="{% url 'records:manage' event.slug %}" {% if section == 'certificates' %}aria-current="page"{% endif %}>Certificates</a>
+  <a href="{% url 'integrity:review' event.slug %}" {% if section == 'integrity' %}aria-current="page"{% endif %}>Integrity</a>
+  <a href="{% url 'embeds:manage' event.slug %}" {% if section == 'embed' %}aria-current="page"{% endif %}>Embed</a>
+  <a href="{% url 'webhooks:manage' event.slug %}" {% if section == 'webhooks' %}aria-current="page"{% endif %}>Webhooks</a>
+  <a href="{% url 'judging:exports' event.slug %}" {% if section == 'exports' %}aria-current="page"{% endif %}>CSV exports</a>
+  <a href="{% url 'transfer:manage' event.slug %}" {% if section == 'transfer' %}aria-current="page"{% endif %}>Export and import</a>
+  <a href="{% url 'events:manage_activity' event.slug %}" {% if section == 'activity' %}aria-current="page"{% endif %}>Activity</a>
+</nav>

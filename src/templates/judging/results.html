@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Results · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+{% include "judging/_subnav.html" %}
+<section class="panel{% if publish_state == 'unpublished' and results.ready %} panel-strong{% endif %} publish-panel">
+  <h2 class="panel-title">Publishing the results</h2>
+  {% if publish_state == 'published' %}
+  <p><strong>Published</strong> {% when config.results_published_at event %}{% if config.results_published_by %} by {{ config.results_published_by.display_name }}{% endif %}. Everyone can see the ranking on the <a href="{% url 'judging:public_results' event.slug %}">results page</a>{% if config.share_feedback %}, and each team sees its own marks and the judges' comments, without names{% endif %}. Judging is closed.</p>
+  <form method="post" data-confirm="Take the results down? Only organizers will see the ranking again. Judging stays closed.">
+    {% csrf_token %}<input type="hidden" name="op" value="unpublish">
+    <p class="small"><button class="linklike danger" type="submit">Take them down</button></p>
+  </form>
+  {% elif publish_state == 'not_ready' %}
+  <p>Only you can see this ranking. It can be published once submissions have closed and judges have scored.</p>
+  {% elif not results.ready %}
+  <p>Only you can see this page. There's nothing to publish until projects have submitted scores.</p>
+  {% else %}
+  <p>Only organizers can see this ranking. Publishing puts it on the event's <a href="{% url 'judging:public_results' event.slug %}">results page</a> for participants and visitors, with the winners and the community vote once those are out.{% if judging_phase == 'open' %} <strong>It also closes judging now</strong>, so the published ranking is final: judges can't change their scores after.{% endif %}{% if pending %} {{ pending }} draft score{{ pending|pluralize }} haven't been submitted and won't count.{% endif %}</p>
+  <form method="post" data-confirm="Publish the judges' results?{% if judging_phase == 'open' %} Judging closes now and scores can't change after.{% endif %}">
+    {% csrf_token %}<input type="hidden" name="op" value="publish">
+    <label class="check"><input type="checkbox" name="share_feedback"> <span>Share the judges' feedback with each team: its average mark per criterion and the comments, never who wrote them</span></label>
+    {% if winners_later %}<label class="check"><input type="checkbox" name="announce_winners" checked> <span>Announce the winners now too (they're due {% when event.results_at event %})</span></label>{% endif %}
+    <p class="actions"><button class="btn" type="submit">Publish the results</button></p>
+  </form>
+  {% endif %}
+</section>
+{% if not results.ready %}
+<div class="empty"><p>{{ results.reason }}</p></div>
+{% else %}
+<div class="split split-wide">
+  <section>
+    <header class="block-head">
+      <h2>{% if track %}{{ track.name }}{% else %}Rankings{% endif %}</h2>
+      <form method="get" class="inline-form">
+        <label class="sr-only" for="r-track">Track</label>
+        <select id="r-track" name="track" data-autosubmit>
+          <option value="">Every track</option>
+          {% for t in tracks %}<option value="{{ t.pk }}"{% if track and track.pk == t.pk %} selected{% endif %}>{{ t.name }}</option>{% endfor %}
+        </select>
+        <noscript><button class="btn btn-small" type="submit">Show</button></noscript>
+      </form>
+    </header>
+    <p class="small">Ranked by normalized score. The raw-average rank sits alongside, so you can see exactly what normalization changed and argue with it.{% if track %} Normalization still uses every score each judge gave, in any track; only the list is filtered.{% endif %}</p>
+    <div class="table-wrap">
+      <table class="table results-table">
+        <thead><tr><th class="num">#</th><th>Moved</th><th>Project</th><th class="num">Reviews</th><th class="num">Raw avg</th><th class="num">Normalized</th><th class="num">z</th></tr></thead>
+        <tbody>
+          {% for row in results.rows %}
+          <tr{% if not row.reviews %} class="row-muted"{% endif %}>
+            <td class="num rank">{{ row.rank|default:"" }}</td>
+            <td class="move">{% if row.movement %}{% if row.movement > 0 %}<span class="move-up" title="Up {{ row.movement }} from raw rank {{ row.raw_rank }}">&#9650; {{ row.movement }}</span>{% else %}<span class="move-down" title="Down {{ row.move_size }} from raw rank {{ row.raw_rank }}">&#9660; {{ row.move_size }}</span>{% endif %}{% elif row.reviews %}<span class="move-none" title="Same as the raw ranking">&middot;</span>{% endif %}</td>
+            <td><a href="{{ row.project.get_absolute_url }}"><strong>{{ row.project.title }}</strong></a><br><span class="small muted">{{ row.project.team.name }}{% if not track and row.project.track %} · {{ row.project.track.name }}{% endif %}</span>
+              {% if row.thin %}<br><span class="flag-thin">rests on {{ row.informative }} informative review{{ row.informative|pluralize }}</span>{% endif %}</td>
+            <td class="num">{% if row.reviews %}{{ row.reviews }}{% if row.informative != row.reviews %} <span class="muted small">({{ row.informative }})</span>{% endif %}{% else %}<span class="muted">none yet</span>{% endif %}</td>
+            <td class="num">{% if row.raw_mean is not None %}{{ row.raw_mean|floatformat:2 }} <span class="muted small">#{{ row.raw_rank }}</span>{% endif %}</td>
+            <td class="num"><strong>{% if row.display is not None %}{{ row.display|floatformat:2 }}{% endif %}</strong></td>
+            <td class="num mono small">{% if row.z_mean is not None %}{{ row.z_mean|floatformat:2 }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="help">Reviews in brackets count only judges whose marks carry signal: two or more scores that aren't all the same. A project flagged as resting on fewer than two of those is ranked mostly on its other reviewers; a third review would settle it.</p>
+  </section>
+
+  <aside class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">How the score is made</h2>
+      <ol class="method">
+        <li><strong>Weighted mark.</strong> Each judge's marks are combined with the rubric weights, on the {{ config.scale_min }} to {{ config.scale_max }} scale.</li>
+        <li><strong>Per-judge z-score.</strong> Each mark is compared with that judge's own average and spread, so a harsh judge's 3 and a generous judge's 4.5 can mean the same thing. The spread is shrunk toward everyone's (kappa {{ results.kappa|floatformat:"-1" }}), so a judge with two scores can't swing a result.</li>
+        <li><strong>Average.</strong> A project's z is the mean over its judges, shown back on the familiar scale (overall mean {{ results.pop_mean|floatformat:2 }}, spread {{ results.pop_std|floatformat:2 }}).</li>
+      </ol>
+      <p class="small">The full argument, and the test showing it ranks closer to the truth than a raw average, is in JUDGING.md.</p>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">What went in</h2>
+      <dl class="facts">
+        <div><dt>Scores counted</dt><dd>{{ results.score_count }}</dd></div>
+        <div><dt>Judges</dt><dd>{{ results.judge_count }}</dd></div>
+        <div><dt>Not yet reviewed</dt><dd>{{ results.unreviewed }}</dd></div>
+        <div><dt>Left out: on flagged duplicates</dt><dd>{{ results.excluded_duplicates }}</dd></div>
+        <div><dt>Left out: drafts</dt><dd>{{ pending }}</dd></div>
+        {% if results.incomplete %}<div><dt>Left out: missing a mark</dt><dd>{{ results.incomplete }}</dd></div>{% endif %}
+      </dl>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">Download</h2>
+      <ul class="plain">
+        <li><a href="{% url 'judging:export' event.slug 'final-rankings' %}">final-rankings.csv</a></li>
+        <li><a href="{% url 'judging:export' event.slug 'normalized-scores' %}">normalized-scores.csv</a></li>
+        <li><a href="{% url 'judging:export' event.slug 'raw-scores' %}">raw-scores.csv</a></li>
+      </ul>
+    </section>
+  </aside>
+</div>
+
+<section class="block">
+  <header class="block-head"><h2>How each judge marks</h2><span class="small muted">Harshest first</span></header>
+  <p class="small">This is what normalization corrects for. "Lean" compares a judge's average with everyone's ({{ results.pop_mean|floatformat:2 }}); it's a label for you, not an input to the maths.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Judge</th><th class="num">Scores</th><th class="num">Average</th><th class="num">Spread</th><th class="num">Spread used</th><th>Lean</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for c in results.calibration %}
+        <tr>
+          <td>{{ c.user.display_name }}{% if c.user.external_id %} <span class="mono muted small">{{ c.user.external_id }}</span>{% endif %}</td>
+          <td class="num">{{ c.count }}</td>
+          <td class="num">{{ c.mean|floatformat:2 }} <span class="small {% if c.bias < 0 %}move-down{% else %}move-up{% endif %}">{% if c.bias >= 0 %}+{% endif %}{{ c.bias|floatformat:2 }}</span></td>
+          <td class="num">{{ c.stdev|floatformat:2 }}</td>
+          <td class="num">{{ c.sigma|floatformat:2 }}</td>
+          <td>{% if c.lean %}<span class="stamp stamp-lean-{{ c.lean }}">{{ c.lean }}</span>{% endif %}</td>
+          <td class="small">{{ c.label }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

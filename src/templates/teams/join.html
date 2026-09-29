@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Join {{ team.name }}{% endblock %}
+{% block content %}
+<div class="invite-card">
+  <p class="eyebrow">Invitation · <a href="{{ event.get_absolute_url }}">{{ event.name }}</a></p>
+  <h1 class="display">Join {{ team.name }}</h1>
+  <ul class="plain people">
+    {% for m in members %}<li><span class="avatar" aria-hidden="true">{{ m.user.initials }}</span>{{ m.user.display_name }}{% if m.role == 'captain' %} <span class="small muted">captain</span>{% endif %}</li>{% endfor %}
+  </ul>
+
+  {% if not viewer %}
+    <p>Sign in or create an account first, then this link brings you straight back here.</p>
+    <p class="actions">
+      <a class="btn" href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}">Sign in</a>
+      <a class="btn btn-ghost" href="{% url 'accounts:signup' %}?next={{ request.path|urlencode }}">Create account</a>
+    </p>
+  {% elif viewer.team and viewer.team.pk == team.pk %}
+    <p>You're already on this team. <a href="{% url 'teams:mine' event.slug %}">Go to the team page</a>.</p>
+  {% elif event.is_closed %}
+    <div class="notice notice-closed"><p>Submissions for {{ event.name }} closed {% when event.submissions_close_at event %}. Teams are locked.</p></div>
+  {% elif viewer.is_staff %}
+    <div class="notice notice-warn"><p>You're {{ viewer.role_labels|join:" and "|lower }} for this event, so you can't join a team in it.</p></div>
+  {% elif viewer.team %}
+    <div class="notice notice-warn"><p>You're on <a href="{% url 'teams:mine' event.slug %}">{{ viewer.team.name }}</a> for this event. Leave it first if you want to switch.</p></div>
+  {% elif full %}
+    <div class="notice notice-warn"><p>{{ team.name }} is full ({{ event.max_team_size }} people is the limit). Ask them to make room.</p></div>
+  {% else %}
+    <form method="post">
+      {% csrf_token %}
+      <p>You'll be able to edit the team's submission until the deadline, {% when event.submissions_close_at event %}.</p>
+      <p class="actions"><button class="btn" type="submit">Join the team</button></p>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

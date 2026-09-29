@@ -1,0 +1,13 @@
+{% load ui %}
+{% if config.is_quadratic %}
+<p>You get <strong>{{ credits }} credits</strong> to spread over the projects you like. Votes cost the square of their number: putting more on one project gets steeply more expensive, so it pays to back several you rate rather than pile everything on one.</p>
+<table class="cost-table">
+  <caption class="sr-only">What votes on one project cost</caption>
+  <thead><tr><th scope="row">Votes on one project</th>{% for n, c in cost_steps %}<td>{{ n }}</td>{% endfor %}</tr></thead>
+  <tbody><tr><th scope="row">Credits it costs</th>{% for n, c in cost_steps %}<td>{{ c }}</td>{% endfor %}</tr></tbody>
+</table>
+<p class="small muted">{{ ceiling }} vote{{ ceiling|pluralize }} is the most one ballot can give one project. That keeps a group of friends who all go all-in on one project from outweighing everyone who spread their support honestly.</p>
+{% else %}
+<p>One person, one vote: pick the single project you'd most like to win.</p>
+{% endif %}
+<p class="small muted">You can't vote for your own team's project. You can change your ballot until voting closes{% if config.closes_at %}, {% when config.closes_at event %}{% endif %}.</p>

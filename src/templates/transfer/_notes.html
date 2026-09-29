@@ -1,0 +1,6 @@
+{% if notes %}
+<h3 class="sub-head">Worth knowing ({{ notes|length }})</h3>
+<ul class="reasons report-notes">{% for note in notes %}<li>{{ note }}</li>{% endfor %}</ul>
+{% else %}
+<p class="small muted">Nothing to report: every record goes in as it is.</p>
+{% endif %}

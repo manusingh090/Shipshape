@@ -1,0 +1,21 @@
+{% load ui %}
+<article class="event-row">
+  <div class="event-row-date" aria-hidden="true">
+    <span class="event-row-label">Deadline</span>
+    <span class="event-row-day">{{ event.submissions_close_at|day_number:event }}</span>
+    <span class="event-row-month">{{ event.submissions_close_at|month_year:event }}</span>
+  </div>
+  <div class="event-row-main">
+    <h3><a href="{{ event.get_absolute_url }}">{{ event.name }}</a>{% if not event.is_published %} <span class="stamp stamp-draft">Unpublished</span>{% endif %}</h3>
+    {% if event.tagline %}<p>{{ event.tagline }}</p>{% endif %}
+    <p class="meta">{{ event.track_count }} track{{ event.track_count|pluralize }} · {{ event.team_count }} team{{ event.team_count|pluralize }} · {{ event.project_count }} project{{ event.project_count|pluralize }}{% if event.location %} · {{ event.location }}{% endif %}</p>
+  </div>
+  <div class="event-row-status">
+    {% include "events/_phase_stamp.html" %}
+    <p>
+      {% if event.is_open %}Closes in <strong data-countdown="{{ event.submissions_close_at|iso }}" data-done="now closed">{{ event.submissions_close_at|until }}</strong>
+      {% elif event.is_upcoming %}Kickoff {% when event.starts_at event "short" %}
+      {% else %}Closed {% when event.submissions_close_at event "date" %}{% endif %}
+    </p>
+  </div>
+</article>

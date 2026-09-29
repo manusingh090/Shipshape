@@ -1,0 +1,23 @@
+services:
+  portal:
+    # Everything the image needs (code, templates, static files, fixtures.json)
+    # lives in src/, so that's the build context.
+    build: ./src
+    image: shipshape-portal:local
+    ports:
+      # Host port 8080 by default. If something else already uses it:
+      #   PORTAL_PORT=8090 docker compose up
+      - "${PORTAL_PORT:-8080}:8080"
+    environment:
+      # Demo mode seeds fixtures.json, demo accounts and the fixed session
+      # cookies that .dogfood.toml uses. Turn it off for a real event.
+      DEMO_MODE: "1"
+      DEMO_PASSWORD: "dogfood-demo"
+      PORTAL_URL: "http://localhost:${PORTAL_PORT:-8080}"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,[::1],0.0.0.0"
+    volumes:
+      - portal-data:/data
+    restart: unless-stopped
+
+volumes:
+  portal-data:

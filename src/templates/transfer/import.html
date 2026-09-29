@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Import an event{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{% url 'events:organize' %}">Organize</a></p>
+  <h1 class="display">Import an event</h1>
+  <p class="lede">Bring an event in from a DOGFOOD <span class="mono">fixtures.json</span> (the shape every portal in the hackathon loads, including exports from them), or a whole Shipshape archive. It becomes a new, unpublished event that you organize. Nothing is saved until you've seen the preview.</p>
+</header>
+
+<div class="layout-2">
+  <div>
+    {% if report %}
+    <section class="block">
+      <header class="block-head"><h2>What will happen</h2><span class="small muted">{{ pending.file }}</span></header>
+      {% include "transfer/_report.html" %}
+      <form method="post" class="actions">{% csrf_token %}
+        <button class="btn" name="op" value="commit">Import it</button>
+        <button class="btn btn-ghost" name="op" value="cancel">Cancel</button>
+      </form>
+    </section>
+    {% else %}
+    <section class="block">
+      <header class="block-head"><h2>Choose the file</h2></header>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="op" value="preview">
+        <div class="field"><label for="file">fixtures.json, shipshape.json or an archive .zip</label><input id="file" type="file" name="file" accept=".json,.zip,application/json,application/zip" required></div>
+        <div class="field"><label for="name">Call it <span class="opt">optional</span></label><input id="name" type="text" name="name" maxlength="140" placeholder="Leave empty to keep the name in the file"><div class="help">Handy when the same event is already on this portal.</div></div>
+        <button class="btn" type="submit">Preview the import</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+  <aside class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">What comes in</h2>
+      <p class="small"><strong>From fixtures.json:</strong> the event and deadline, tracks, judges and their tracks, teams and members, projects and scores.</p>
+      <p class="small"><strong>From a Shipshape archive, also:</strong> every detail and date, prizes and winners, form questions and answers, tags, links and images, the rubric's weights, assignments and score history, conflicts, the community vote and its ballots, comments and the activity log.</p>
+      <p class="small"><strong>Never:</strong> passwords (people are matched by email; new ones get an account with no password yet) and certificates, which stay valid with the key that signed them.</p>
+      <p class="small">The portal's rules still apply: staff don't compete, a second project from one team is kept as a flagged duplicate, anything handed in late arrives as a draft. Each exception is listed in the preview.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

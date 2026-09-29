@@ -1,0 +1,13 @@
+{% load ui %}
+<nav class="subtabs" aria-label="Judging">
+  <a href="{% url 'judging:progress' event.slug %}" {% if sub == 'progress' %}aria-current="page"{% endif %}>Progress</a>
+  <a href="{% url 'judging:rubric' event.slug %}" {% if sub == 'rubric' %}aria-current="page"{% endif %}>Rubric</a>
+  <a href="{% url 'judging:judges' event.slug %}" {% if sub == 'judges' %}aria-current="page"{% endif %}>Judges</a>
+  <a href="{% url 'judging:assignments' event.slug %}" {% if sub == 'assignments' %}aria-current="page"{% endif %}>Assignments</a>
+  <a href="{% url 'judging:results' event.slug %}" {% if sub == 'results' %}aria-current="page"{% endif %}>Results</a>
+</nav>
+{% if judging_phase == 'not_open' %}
+<div class="notice"><p><strong>Judging hasn't started.</strong> It opens when submissions close, {% when event.submissions_close_at event %}, so every judge sees final projects. You can set up the rubric and judges now.</p></div>
+{% elif judging_phase == 'closed' %}
+<div class="notice notice-closed"><p><strong>Judging ended {% when event.judging_ends_at event %}.</strong> Scores are final, and the results are all still here.</p></div>
+{% endif %}

@@ -1,0 +1,33 @@
+{{ form.non_field_errors }}
+<section class="form-section">
+  <h2 class="form-section-title">Name and pitch</h2>
+  <div class="form-grid">
+    {% include "_field.html" with field=form.name %}
+    {% include "_field.html" with field=form.slug %}
+  </div>
+  {% include "_field.html" with field=form.tagline %}
+  {% include "_field.html" with field=form.location %}
+  {% include "_field.html" with field=form.description %}
+</section>
+
+<section class="form-section">
+  <h2 class="form-section-title">Dates</h2>
+  <p class="help">Type times in the event's own time zone. They're stored in UTC and shown to everyone in this zone, with their local time on hover.</p>
+  {% include "_field.html" with field=form.timezone %}
+  <div class="form-grid">
+    {% include "_field.html" with field=form.starts_at %}
+    {% include "_field.html" with field=form.submissions_close_at %}
+    {% include "_field.html" with field=form.judging_ends_at %}
+    {% include "_field.html" with field=form.results_at %}
+  </div>
+</section>
+
+<section class="form-section">
+  <h2 class="form-section-title">Teams and visibility</h2>
+  <div class="form-grid">
+    {% include "_field.html" with field=form.max_team_size %}
+  </div>
+  {% include "_field.html" with field=form.is_published %}
+  {% if form.comments_enabled %}{% include "_field.html" with field=form.comments_enabled %}{% endif %}
+  {% if form.gallery_before_deadline %}{% include "_field.html" with field=form.gallery_before_deadline %}{% endif %}
+</section>

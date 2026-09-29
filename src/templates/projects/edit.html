@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Submission · {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{{ event.get_absolute_url }}">{{ event.name }}</a> · <a href="{% url 'teams:mine' event.slug %}">{{ team.name }}</a></p>
+  <h1 class="display">{% if project %}Your submission{% else %}Start your submission{% endif %}</h1>
+  {% if editable %}<p class="lede">Save as often as you like. Drafts are private; once you submit, the project appears in the gallery and you can still edit it until the deadline.</p>{% endif %}
+</header>
+
+{% if refused %}
+<div class="notice notice-error" role="alert"><p><strong>Not saved.</strong> {{ refused }}</p></div>
+{% endif %}
+{% if not editable %}
+<div class="notice notice-closed">
+  <p>{% if event.is_closed %}<strong>Submissions closed {% when event.submissions_close_at event %}.</strong> This is exactly what the judges see. Nobody can change it now, organizers included.{% else %}<strong>Not open yet.</strong> Project editing opens at kickoff, {% when event.starts_at event %}.{% endif %}</p>
+</div>
+{% else %}
+<div class="notice notice-error" id="deadline-passed" hidden role="alert"><p><strong>The deadline just passed.</strong> Anything you save now will be refused. Reload to see your last saved version.</p></div>
+{% endif %}
+
+<div class="layout-2">
+  <div>
+    {% if editable %}
+    <p class="notice only-narrow">
+      {% if project %}<span class="stamp stamp-{{ project.status }}">{{ project.get_status_display }}</span>&nbsp;{% endif %}
+      Deadline in <strong data-countdown="{{ event.submissions_close_at|iso }}" data-done="0 seconds">{{ event.submissions_close_at|until }}</strong>{% if checklist %}, {{ checklist|length }} thing{{ checklist|length|pluralize }} still needed to submit{% endif %}.
+    </p>
+    {% endif %}
+    <form method="post" enctype="multipart/form-data" novalidate {% if editable %}data-warn-unsaved{% endif %}>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <fieldset {% if not editable %}disabled{% endif %}>
+        <section class="form-section">
+          <h2 class="form-section-title">The basics</h2>
+          {% include "_field.html" with field=form.title %}
+          {% include "_field.html" with field=form.tagline %}
+          {% include "_field.html" with field=form.track %}
+          {% include "_field.html" with field=form.description %}
+        </section>
+
+        <section class="form-section">
+          <h2 class="form-section-title">Links</h2>
+          {% include "_field.html" with field=form.repo_url %}
+          {% include "_field.html" with field=form.live_url %}
+          {% include "_field.html" with field=form.demo_video_url %}
+        </section>
+
+        <section class="form-section">
+          <h2 class="form-section-title">Tags and thumbnail</h2>
+          {% include "_field.html" with field=form.tags %}
+          {% if project.thumbnail %}
+          <div class="current-thumb">
+            <img src="{% url 'media' project.thumbnail %}" alt="Current thumbnail">
+            {% include "_field.html" with field=form.remove_thumbnail %}
+          </div>
+          {% endif %}
+          {% include "_field.html" with field=form.thumbnail %}
+        </section>
+
+        {% if form.questions %}
+        <section class="form-section">
+          <h2 class="form-section-title">From the organizers</h2>
+          {% for question, field in form.question_fields %}{% include "_field.html" with field=field question=question %}{% endfor %}
+        </section>
+        {% endif %}
+      </fieldset>
+
+      {% if editable %}
+      <div class="form-actions sticky-actions">
+        {% if project.status == 'submitted' %}
+          <button class="btn" type="submit" name="action" value="save">Save changes</button>
+          <span class="help">Changes go live in the gallery straight away.</span>
+        {% else %}
+          <button class="btn btn-ghost" type="submit" name="action" value="save">Save draft</button>
+          <button class="btn" type="submit" name="action" value="submit">Submit project</button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </form>
+
+    {% if project %}
+    <section class="form-section" id="images">
+      <h2 class="form-section-title">Image gallery</h2>
+      <p class="help">Up to {{ max_images }} screenshots or photos. They're re-encoded on upload, which also strips location data from phone photos.</p>
+      {% if images %}
+      <ul class="image-grid">
+        {% for image in images %}
+        <li>
+          <img src="{% url 'media' image.path %}" alt="Image {{ forloop.counter }}">
+          {% if editable %}<form method="post" action="{% url 'projects:image_delete' event.slug image.pk %}" data-confirm="Remove this image?">{% csrf_token %}<button class="linklike danger" type="submit">Remove</button></form>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% elif not editable %}
+      <p class="muted">No images.</p>
+      {% endif %}
+      {% if editable and images_left > 0 %}
+      <form class="upload-form" method="post" action="{% url 'projects:image_upload' event.slug %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <label for="image-files">Add images ({{ images_left }} left)</label>
+        <input id="image-files" type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple required>
+        <button class="btn btn-ghost btn-small" type="submit">Upload</button>
+      </form>
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="side-col sticky">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Status</h2>
+      <p class="status-line">
+        {% if project %}<span class="stamp stamp-{{ project.status }}">{{ project.get_status_display }}</span>{% else %}<span class="stamp stamp-draft">Nothing saved</span>{% endif %}
+      </p>
+      {% if project.status == 'submitted' %}
+        <p>Submitted {% when project.submitted_at event %}. Judges see whatever is saved when the deadline hits.</p>
+        {% if editable %}
+        <form method="post" action="{% url 'projects:withdraw' event.slug %}" data-confirm="Move the project back to draft? It leaves the gallery until you submit again.">{% csrf_token %}<button class="linklike" type="submit">Move back to draft</button></form>
+        {% endif %}
+      {% elif project %}
+        <p>Only your team and the organizers can see a draft. {% if editable %}Submit it before the deadline or it won't be judged.{% else %}It was never submitted.{% endif %}</p>
+      {% endif %}
+
+      {% if editable %}
+      <p class="deadline-mini">Deadline {% when event.submissions_close_at event %}<br><strong data-countdown="{{ event.submissions_close_at|iso }}" data-done="passed">{{ event.submissions_close_at|until }}</strong> left</p>
+      {% endif %}
+
+      {% if project %}
+        {% if editable %}
+          {% if checklist %}
+          <div class="checklist">
+            <p class="label">Still needed to submit</p>
+            <ul>{% for item in checklist %}<li>{{ item|capfirst }}</li>{% endfor %}</ul>
+          </div>
+          {% else %}
+          <p class="ok">Everything required is filled in.</p>
+          {% endif %}
+        {% endif %}
+        <p><a href="{{ project.get_absolute_url }}">{% if project.status == 'submitted' %}See the public page{% else %}Preview the page{% endif %}</a></p>
+      {% endif %}
+    </section>
+
+    {% if history %}
+    <section class="panel">
+      <h2 class="panel-title">Team history</h2>
+      <ol class="history">
+        {% for item in history %}<li{% if item.is_refusal %} class="refused"{% endif %}>{% when item.created_at event "short" %}{{ item.actor.display_name|default:"Someone" }} {{ item.detail }}</li>{% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

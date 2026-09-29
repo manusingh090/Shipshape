@@ -1,0 +1,12 @@
+{% load ui %}
+<ol class="milestones" aria-label="Key dates">
+  {% for m in milestones %}
+  <li class="ms ms-{{ m.key }}{% if m.past %} is-past{% endif %}{% if m.current %} is-current p{{ m.step }}{% endif %}{% if m.before %} is-before{% endif %}">
+    {% if m.current or m.before %}<span class="ms-flag" aria-hidden="true">Now</span>{% endif %}
+    <span class="ms-label">{{ m.label }}</span>
+    <span class="ms-date">{% when m.at event "short" %}</span>
+    {% if m.current %}<span class="sr-only">We are past this date{% if not forloop.last %} and before the next one{% endif %}.</span>{% endif %}
+    {% if m.before %}<span class="sr-only">This hasn't started yet.</span>{% endif %}
+  </li>
+  {% endfor %}
+</ol>

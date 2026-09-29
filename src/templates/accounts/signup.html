@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Create an account{% endblock %}
+{% block content %}
+<div class="auth-grid">
+  <section>
+    <p class="eyebrow">New account</p>
+    <h1 class="display">Create an account</h1>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      {{ form.non_field_errors }}
+      {% include "_field.html" with field=form.name %}
+      {% include "_field.html" with field=form.email %}
+      {% include "_field.html" with field=form.password1 %}
+      {% include "_field.html" with field=form.password2 %}
+      <div class="actions"><button class="btn" type="submit">Create account</button></div>
+    </form>
+    <p class="auth-foot">Already have one? <a href="{% url 'accounts:login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign in</a>.</p>
+  </section>
+  <aside class="side-col">
+    <section class="panel">
+      <h2 class="panel-title">What an account gets you</h2>
+      <p>Start or join teams, submit projects and edit them until the deadline.</p>
+      <p>Organizers can ask an admin for the organizer role to run their own hackathons, and they can add you as a judge.</p>
+      <p class="small muted">Passwords are stored as salted PBKDF2 hashes. Nothing leaves this machine.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

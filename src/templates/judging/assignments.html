@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Assignments · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+{% include "judging/_subnav.html" %}
+<div class="split">
+  <div>
+    {% if proposal %}
+    <section class="panel panel-strong" id="preview">
+      <h2 class="panel-title">Preview: nothing saved yet</h2>
+      <p><strong>{{ proposal.total }} new review{{ proposal.total|pluralize }}</strong> for {{ proposal.rows|length }} project{{ proposal.rows|length|pluralize }} ({{ proposal.scope }}). Seed <span class="mono">{{ proposal.seed }}</span>: saving re-runs the plan with it, so you get exactly this unless the data changes first.</p>
+      {% if proposal.shortfalls %}
+      <div class="notice notice-warn"><p><strong>Not enough eligible judges</strong> for {{ proposal.shortfalls|length }} project{{ proposal.shortfalls|length|pluralize }}:
+        {% for project, missing in proposal.shortfalls %}{{ project.title }} ({{ missing }} short){% if not forloop.last %}, {% endif %}{% endfor %}.
+        Add judges to those tracks, or a floater, and run again.</p></div>
+      {% endif %}
+      {% if proposal.rows %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Project</th><th>Track</th><th>Gets</th></tr></thead>
+          <tbody>
+            {% for project, users in proposal.rows %}
+            <tr><td>{{ project.title }}</td><td>{% if project.track %}<span class="track-chip {{ project.track|track_class }}">{{ project.track.name }}</span>{% endif %}</td><td>{% for u in users %}{{ u.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <details class="reveal">
+        <summary>Judge load before and after</summary>
+        <table class="table">
+          <thead><tr><th>Judge</th><th class="num">Before</th><th class="num">After</th></tr></thead>
+          <tbody>{% for user, before, after, added in proposal.load %}<tr><td>{{ user.display_name }}</td><td class="num">{{ before }}</td><td class="num">{{ after }}{% if added %} <span class="move-up">+{{ added }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+        </table>
+      </details>
+      <form method="post" class="actions">
+        {% csrf_token %}
+        <input type="hidden" name="op" value="commit">
+        {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        <button class="btn" type="submit">Save this batch</button>
+        <a href="{{ request.path }}">Discard</a>
+      </form>
+      {% else %}
+      <p class="muted">Every project in that scope already has enough reviewers. Nothing to do.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section class="block">
+      <header class="block-head"><h2>Batches</h2><span class="small muted">{{ total }} assignment{{ total|pluralize }} in all</span></header>
+      {% if batches %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Batch</th><th>How</th><th class="num">Reviews</th><th>Gaps</th></tr></thead>
+          <tbody>
+            {% for b in batches %}
+            <tr>
+              <td><strong>{{ b.label }}</strong><br><span class="small muted">{% when b.created_at event "short" %}{% if b.created_by %} by {{ b.created_by.display_name }}{% endif %}</span></td>
+              <td class="small">{{ b.get_mode_display }}{% if b.scope %}: {{ b.scope }}{% endif %}{% if b.seed %}<br><span class="mono">seed {{ b.seed }}</span>{% endif %}</td>
+              <td class="num">{{ b.n }}</td>
+              <td class="small">{% if b.shortfall_count %}<span class="req">{{ b.shortfall_count }} unplaced</span>{% else %}<span class="muted">none</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">No batches yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="block" id="all">
+      <header class="block-head"><h2>Every assignment</h2></header>
+      <form class="filters" method="get" action="#all">
+        <div class="filter-field"><label for="f-judge">Judge</label><select id="f-judge" name="judge" data-autosubmit><option value="">Anyone</option>{% for u in judges %}<option value="{{ u.pk }}"{% if filters.judge == u.pk|stringformat:"s" %} selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select></div>
+        <div class="filter-field"><label for="f-track">Track</label><select id="f-track" name="track" data-autosubmit><option value="">All</option>{% for t in tracks %}<option value="{{ t.pk }}"{% if filters.track == t.pk|stringformat:"s" %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></div>
+        <div class="filter-field"><label for="f-status">Status</label><select id="f-status" name="status" data-autosubmit><option value="">Any</option><option value="pending"{% if filters.status == 'pending' %} selected{% endif %}>Not started</option><option value="draft"{% if filters.status == 'draft' %} selected{% endif %}>Draft</option><option value="submitted"{% if filters.status == 'submitted' %} selected{% endif %}>Submitted</option></select></div>
+        <div class="filter-actions"><button class="btn btn-small" type="submit">Filter</button></div>
+      </form>
+      {% if page.object_list %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Project</th><th>Judge</th><th>Batch</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for a in page.object_list %}
+            <tr>
+              <td><a href="{{ a.project.get_absolute_url }}">{{ a.project.title }}</a><br><span class="small muted">{{ a.project.track.name|default:"No track" }}</span></td>
+              <td>{{ a.judge.display_name }}</td>
+              <td class="small">{{ a.batch.label|default:"by hand" }}</td>
+              <td>{% if a.score and a.score.submitted_at %}<span class="stamp stamp-submitted">Submitted</span>{% elif a.score %}<span class="stamp stamp-draft">Draft</span>{% else %}<span class="stamp stamp-j-not_started">Not started</span>{% endif %}</td>
+              <td class="row-actions">{% if not a.score or not a.score.submitted_at %}<form method="post" data-confirm="Take this off {{ a.judge.display_name }}'s queue?">{% csrf_token %}<input type="hidden" name="op" value="remove"><input type="hidden" name="id" value="{{ a.pk }}"><button class="linklike danger" type="submit">Remove</button></form>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "_pagination.html" %}
+      {% else %}
+      <p class="muted">Nothing matches.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="side-col">
+    <section class="panel{% if not proposal %} panel-strong{% endif %}">
+      <h2 class="panel-title">Run a batch</h2>
+      {% if not can_assign %}
+      <p class="muted">Assignment opens when submissions close, {% when event.submissions_close_at event %}.</p>
+      {% else %}
+      <p class="small">The engine gives each project the judges in its track who carry the fewest reviews, never someone with a conflict or a repeat, and shuffles first so order can't bias it.</p>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="op" value="preview">
+        {{ batch_form.non_field_errors }}
+        {% include "_field.html" with field=batch_form.label %}
+        {% include "_field.html" with field=batch_form.scope %}
+        <div data-show-when="scope:track">{% include "_field.html" with field=batch_form.track %}</div>
+        <div data-show-when="scope:chosen">{% include "_field.html" with field=batch_form.projects %}</div>
+        {% include "_field.html" with field=batch_form.judges_scope %}
+        <div data-show-when="judges_scope:chosen">{% include "_field.html" with field=batch_form.judges %}</div>
+        <div class="form-grid">
+          {% include "_field.html" with field=batch_form.target %}
+          {% include "_field.html" with field=batch_form.seed %}
+        </div>
+        <button class="btn" type="submit">Preview</button>
+      </form>
+      {% endif %}
+    </section>
+    {% if can_assign %}
+    <section class="panel">
+      <h2 class="panel-title">Assign one by hand</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="op" value="manual">
+        {% for field in manual_form %}{% include "_field.html" %}{% endfor %}
+        <button class="btn btn-ghost btn-small" type="submit">Assign</button>
+        <p class="help">The same rules apply: only within the judge's tracks, never across a conflict.</p>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

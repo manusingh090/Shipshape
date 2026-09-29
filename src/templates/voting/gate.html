@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Community vote · {{ event.name }}{% endblock %}
+{% block content %}
+<div class="invite-card">
+  <p class="eyebrow">Community vote · <a href="{{ event.get_absolute_url }}">{{ event.name }}</a></p>
+  <h1 class="display">{% if gate == 'email_sent' %}Check your inbox{% elif gate == 'confirm' %}Open your ballot{% else %}Have your say{% endif %}</h1>
+
+  {% if phase == 'not_open' %}
+  <div class="notice"><p>Voting opens {% when opens_at event %}, once every project is final.</p></div>
+  {% elif phase == 'closed' %}
+  <div class="notice notice-closed"><p>Voting closed {% when config.closes_at event %}. Ballots are final.</p></div>
+  {% endif %}
+
+  {% if gate == 'link_needed' %}
+    <p>This vote is by invitation: the organizers share a voting link with the people they want to hear from. If you were at {{ event.name }}, ask them for it.</p>
+    <p class="actions"><a class="btn btn-ghost" href="{% url 'projects:event_gallery' event.slug %}">Browse the projects meanwhile</a></p>
+
+  {% elif gate == 'link_bad' %}
+    <div class="notice notice-warn"><p>That voting link doesn't work. The organizers may have replaced it with a new one; ask them for the current link.</p></div>
+
+  {% elif gate == 'sign_in' %}
+    <p>Voting here needs a Shipshape account, one ballot per account. Sign in or create one, and this page brings you straight back.</p>
+    <p class="actions">
+      <a class="btn" href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}">Sign in</a>
+      <a class="btn btn-ghost" href="{% url 'accounts:signup' %}?next={{ request.path|urlencode }}">Create account</a>
+    </p>
+
+  {% elif gate == 'email' %}
+    {% if account %}
+    <p>Voting here is one ballot per email address. You're signed in, so you vote with your account's address. We'll send a one-time link to it to prove it's yours: accounts here don't check addresses when they're made, so the link is the proof.{% if config.domain_list %} Addresses at {{ config.domain_list|join:", " }} only.{% endif %}</p>
+    {% else %}
+    <p>Voting here is one ballot per email address. We'll send a one-time link to prove the address is yours; no account needed.{% if config.domain_list %} Addresses at {{ config.domain_list|join:", " }} only.{% endif %}</p>
+    {% endif %}
+    {% if error %}<div class="notice notice-error" role="alert"><p>{{ error }}</p></div>{% endif %}
+    {% if phase == 'open' %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="op" value="email">
+      {% if account %}
+      <dl class="facts"><div><dt>Your address</dt><dd>{{ account.email }}</dd></div></dl>
+      <p class="help">Want to vote with a different address? Sign out first (top right). It's one ballot per address either way.</p>
+      <p class="actions"><button class="btn" type="submit">Send the link to my address</button></p>
+      {% else %}
+      <div class="field{% if error %} has-error{% endif %}">
+        <label for="vote-email">Your email</label>
+        <input id="vote-email" type="email" name="email" value="{{ email }}" autocomplete="email" required>
+        <div class="help">Used to keep it to one ballot per person. The organizers can see it; nobody else can.</div>
+      </div>
+      <p class="actions"><button class="btn" type="submit">Send me a voting link</button></p>
+      {% endif %}
+    </form>
+    {% endif %}
+
+  {% elif gate == 'email_sent' %}
+    <p>We've sent a link to <strong>{{ email }}</strong>. It works once, for the next 30 minutes. Open it on this device or any other.</p>
+    {% if demo_link %}
+    <div class="notice notice-warn">
+      <p><strong>Demo mode.</strong> This laptop has no mail server{% if outbox %}, so the message went to the portal's outbox folder instead{% endif %}. Here's the link it contains, so you can carry on:</p>
+      <p class="mono small break"><a href="{{ demo_link }}">{{ demo_link }}</a></p>
+    </div>
+    {% endif %}
+    <p class="small muted">Nothing arrived? Check spam, then <a href="{{ request.path }}">ask for another link</a>.</p>
+
+  {% elif gate == 'confirm' %}
+    <p>You're about to vote as <strong>{{ email }}</strong>. This uses up the link.</p>
+    <form method="post">
+      {% csrf_token %}
+      <p class="actions"><button class="btn" type="submit">Confirm and open my ballot</button></p>
+    </form>
+  {% endif %}
+
+  {% if gate != 'link_bad' %}
+  <section class="block">
+    <header class="block-head"><h2>How this vote works</h2></header>
+    {% include "voting/_method.html" %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Platform audit log{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{% url 'accounts:admin' %}">Platform admin</a></p>
+  <h1 class="display">Platform audit log</h1>
+</header>
+<div class="audit-bar">
+  <nav class="filter-links" aria-label="Filter the log">
+    {% for key, label in categories %}<a href="?only={{ key }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" {% if only == key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+  </nav>
+  <form method="get" class="inline-form" role="search">
+    <input type="hidden" name="only" value="{{ only }}">
+    <label class="sr-only" for="audit-q">Search the log</label>
+    <input id="audit-q" type="search" name="q" value="{{ q }}" placeholder="A name, an email, a word">
+    <button class="btn btn-small" type="submit">Search</button>
+  </form>
+</div>
+<p class="small">Server timestamps in UTC, newest first, never edited. {{ page.paginator.count }} entr{{ page.paginator.count|pluralize:"y,ies" }}{% if only or q %} match{% endif %}.</p>
+{% include "events/manage/_activity_list.html" with items=page.object_list event=None %}
+{% include "_pagination.html" %}
+{% endblock %}

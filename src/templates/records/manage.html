@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Certificates · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<p class="lede-small">Give the prizes, then issue signed certificates and judges' records in one go. Every record can be checked by anyone, with or without this portal, and revoked with a reason if it was issued by mistake.</p>
+{% if not closed %}<div class="notice"><p>Prizes and records wait until submissions close, {% when event.submissions_close_at event %}, so every project is final.</p></div>{% endif %}
+
+<div class="split split-wide">
+  <section>
+    <header class="block-head"><h2>Prizes and winners</h2>{% if not awards_public %}<span class="small muted">Private until {% when event.results_at event %}</span>{% endif %}</header>
+    {% if prizes %}
+    <ul class="plain prize-list">
+      {% for prize in prizes %}
+      <li class="prize-row">
+        <div class="prize-head"><strong>{{ prize.name }}</strong>{% if prize.value %} · {{ prize.value }}{% endif %}<span class="small muted"> · {% if prize.track %}{{ prize.track.name }}{% else %}overall{% endif %} · {{ prize.awards.all|length }} of {{ prize.quantity }} given</span></div>
+        {% for award in prize.awards.all %}
+        <div class="award-line"><span>&#9733; <a href="{{ award.project.get_absolute_url }}">{{ award.project.title }}</a>{% if award.note %} <span class="small muted">({{ award.note }})</span>{% endif %}</span>
+          <form method="post" class="inline" data-confirm="Take “{{ prize.name }}” back from {{ award.project.title }}?">{% csrf_token %}<input type="hidden" name="op" value="unaward"><input type="hidden" name="id" value="{{ award.pk }}"><button class="linklike danger small" type="submit">Take back</button></form></div>
+        {% endfor %}
+        {% if closed and prize.awards.all|length < prize.quantity %}
+        <form method="post" class="award-form">{% csrf_token %}<input type="hidden" name="op" value="award"><input type="hidden" name="prize" value="{{ prize.pk }}">
+          <label class="sr-only" for="p{{ prize.pk }}">Project</label>
+          <select id="p{{ prize.pk }}" name="project">{% for p in projects %}{% if not prize.track or p.track_id == prize.track_id %}<option value="{{ p.pk }}">{{ p.title }} ({{ p.team.name }})</option>{% endif %}{% endfor %}</select>
+          <input type="text" name="note" maxlength="200" placeholder="A line for the certificate, optional" aria-label="Note">
+          <button class="btn btn-small" type="submit">Give it</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><p>No prizes yet. Add them on the <a href="{% url 'events:manage_prizes' event.slug %}">Prizes</a> tab, then come back to give them.</p></div>
+    {% endif %}
+
+    <header class="block-head block-head-spaced"><h2>Issued records</h2><a href="{% url 'judging:export' event.slug 'certificates' %}">CSV</a></header>
+    {% if records %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Who</th><th>What</th><th>Code</th><th></th></tr></thead>
+        <tbody>
+          {% for r in records %}
+          <tr{% if r.is_revoked %} class="row-muted"{% endif %}>
+            <td>{{ r.user.display_name|default:"(account gone)" }}</td>
+            <td>{{ r.get_kind_display }}{% if r.is_revoked %}<br><span class="small">Revoked: {{ r.revoked_reason }}</span>{% endif %}</td>
+            <td><a class="mono small" href="{% url 'records:detail' r.code %}">{{ r.code }}</a></td>
+            <td class="row-actions">{% if not r.is_revoked %}<details class="reveal"><summary class="small">Revoke</summary>
+              <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="op" value="revoke"><input type="hidden" name="id" value="{{ r.pk }}">
+                <input type="text" name="reason" maxlength="200" required placeholder="Why, shown to anyone who checks it" aria-label="Reason">
+                <button class="btn btn-danger btn-small" type="submit">Revoke</button></form></details>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><p>Nothing issued yet.</p></div>
+    {% endif %}
+  </section>
+
+  <aside class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Issue records</h2>
+      <form method="post">{% csrf_token %}<input type="hidden" name="op" value="issue">
+        {% for value, label in kinds %}<label class="check"><input type="checkbox" name="kinds" value="{{ value }}" checked> <span>{{ label }}s</span></label>{% endfor %}
+        <p class="help">Participants: everyone on a team with a listed project. Winners: everyone on a winning team, once awards are public. Judges: everyone with a submitted score; their record carries a fingerprint of their scores, never the marks. Running it again only adds what's missing.</p>
+        <button class="btn btn-small" type="submit"{% if not closed %} disabled{% endif %}>Issue</button>
+      </form>
+    </section>
+    {% if top %}
+    <section class="panel">
+      <h2 class="panel-title">Judging's top five</h2>
+      <ol class="plain small">{% for row in top %}<li>{{ row.rank }}. {{ row.project.title }} <span class="muted">({{ row.display|floatformat:2 }})</span></li>{% endfor %}</ol>
+      <p class="help">From the normalized results, to help pick winners. The community vote's count is on its own tab.</p>
+    </section>
+    {% endif %}
+    <section class="panel">
+      <h2 class="panel-title">How a record is checked</h2>
+      <p class="small">Each is signed with this portal's Ed25519 key. The certificate prints its code and where to check it; the <a href="{% url 'records:verify' %}">verify page</a> shows the public key to publish alongside your results, so records stay checkable after this laptop is switched off.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Results · {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Results · <a href="{{ event.get_absolute_url }}">{{ event.name }}</a></p>
+  <h1 class="display">{% if state == 'published' %}How it came out{% else %}Results{% endif %}</h1>
+  {% if state == 'published' %}
+  <p class="lede">Judged by {{ event.name }}'s judges against a weighted rubric, with each judge's marks put on a common scale first, so a harsh or generous judge doesn't decide anyone's place. Published {% when config.results_published_at event %}.</p>
+  {% endif %}
+</header>
+
+{% if preview %}
+<div class="notice notice-warn"><p><strong>Organizer preview.</strong> {% if state == 'not_ready' %}Submissions are still open, so there's nothing to publish yet.{% else %}Nobody else can see the judges' ranking until you publish it from <a href="{% url 'judging:results' event.slug %}">Judging, Results</a>.{% endif %}</p></div>
+{% endif %}
+
+{% if yours %}
+<section class="panel panel-strong your-result">
+  <h2 class="panel-title">Your project: {{ yours.project.title }}</h2>
+  {% if yours.place %}
+  <p class="your-place"><span class="place-num">{{ yours.place.rank }}</span> <span>of {{ yours.place.of }} ranked projects, with a score of <strong>{{ yours.place.score|floatformat:2 }}</strong> from {{ yours.place.reviews }} review{{ yours.place.reviews|pluralize }}.</span></p>
+  {% elif state == 'published' %}
+  <p>Your project wasn't ranked: it didn't get enough submitted reviews.</p>
+  {% else %}
+  <p>Your place shows here once the organizers publish the results.</p>
+  {% endif %}
+  {% if yours.feedback %}
+  <h3 class="sub-head">What the judges said</h3>
+  <dl class="facts">{% for c in yours.feedback.criteria %}<div><dt>{{ c.label }}</dt><dd>{% if c.average is not None %}{{ c.average|floatformat:1 }} <span class="muted small">of {{ yours.feedback.scale.1 }}</span>{% else %}<span class="muted">no marks</span>{% endif %}</dd></div>{% endfor %}</dl>
+  {% if yours.feedback.comments %}
+  <ul class="plain feedback-list">{% for comment in yours.feedback.comments %}<li><blockquote class="quoted">{{ comment }}</blockquote></li>{% endfor %}</ul>
+  {% endif %}
+  <p class="help">Averages over {{ yours.feedback.reviews }} review{{ yours.feedback.reviews|pluralize }}, as each judge marked them. Comments are in no particular order, and nobody's name is attached.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="block">
+  <header class="block-head"><h2>Winners</h2></header>
+  {% if awards %}
+  {% if viewer.is_organizer and not awards_public %}<p class="small muted">Only organizers see these until {% when event.results_at event %}.</p>{% endif %}
+  <ul class="plain winner-list">
+    {% for a in awards %}
+    <li><span class="stamp">{{ a.prize.name }}</span> <a href="{{ a.project.get_absolute_url }}"><strong>{{ a.project.title }}</strong></a> <span class="small muted">by {{ a.project.team.name }}{% if a.prize.track %} · {{ a.prize.track.name }}{% endif %}</span>{% if a.note %}<br><span class="small">{{ a.note }}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% elif not awards_public %}
+  <div class="empty"><p>Winners are announced {% when event.results_at event %}.</p></div>
+  {% else %}
+  <div class="empty"><p>No prizes have been given yet.</p></div>
+  {% endif %}
+</section>
+
+<section class="block">
+  <header class="block-head">
+    <h2>The judges' ranking</h2>
+    {% if show_ranking and tracks|length > 1 %}
+    <form method="get" class="inline-form">
+      <label class="sr-only" for="pr-track">Track</label>
+      <select id="pr-track" name="track" data-autosubmit>
+        <option value="">Every track</option>
+        {% for t in tracks %}<option value="{{ t.pk }}"{% if track and track.pk == t.pk %} selected{% endif %}>{{ t.name }}</option>{% endfor %}
+      </select>
+      <noscript><button class="btn btn-small" type="submit">Show</button></noscript>
+    </form>
+    {% endif %}
+  </header>
+  {% if show_ranking and rows %}
+  <div class="table-wrap">
+    <table class="table results-table">
+      <thead><tr><th class="num">#</th><th>Project</th><th class="num">Score</th><th class="num">Reviews</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+        <tr{% if yours and yours.project.pk == row.project.pk %} class="row-yours"{% endif %}>
+          <td class="num rank">{{ row.rank }}</td>
+          <td><a href="{{ row.project.get_absolute_url }}"><strong>{{ row.project.title }}</strong></a><br><span class="small muted">{{ row.project.team.name }}{% if not track and row.project.track %} · {{ row.project.track.name }}{% endif %}</span></td>
+          <td class="num"><strong>{{ row.display|floatformat:2 }}</strong></td>
+          <td class="num">{{ row.reviews }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="help">The score is on the rubric's scale ({{ config.scale_min }} to {{ config.scale_max }}), after each judge's marks were adjusted for how harshly or generously they marked overall. Tied scores share a place.{% if track %} Filtering by track doesn't change anyone's score, only the list.{% endif %} How it's worked out is in JUDGING.md, section 4, in the portal's source.</p>
+  {% elif show_ranking %}
+  <div class="empty"><p>No project in {% if track %}{{ track.name }}{% else %}this event{% endif %} has been ranked.</p></div>
+  {% elif state == 'not_ready' %}
+  <div class="empty"><p>Judging starts when submissions close, {% when event.submissions_close_at event %}.</p></div>
+  {% else %}
+  <div class="empty"><p>The judges' results aren't published yet. They'll appear here when the organizers publish them.</p></div>
+  {% endif %}
+</section>
+
+{% if vote_state %}
+<section class="block">
+  <header class="block-head"><h2>The community vote</h2>{% if show_vote %}<a href="{% url 'voting:results' event.slug %}">Every project's votes</a>{% endif %}</header>
+  {% if show_vote and vote_lines %}
+  <ol class="plain vote-top">
+    {% for line in vote_lines %}<li><span class="rank mono">{{ line.rank }}</span> <a href="{{ line.project.get_absolute_url }}">{{ line.project.title }}</a> <span class="small muted">{{ line.votes }} vote{{ line.votes|pluralize }} from {{ line.supporters }} backer{{ line.supporters|pluralize }}</span></li>{% endfor %}
+  </ol>
+  <p class="help">Separate from the judges' ranking.</p>
+  {% elif show_vote %}
+  <div class="empty"><p>Nobody voted.</p></div>
+  {% elif vote_state == 'hidden' %}
+  <div class="empty"><p>Voting is still going, and the count stays hidden until it closes.</p></div>
+  {% else %}
+  <div class="empty"><p>Voting has closed. The organizers are reviewing the ballots before they publish the count.</p></div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

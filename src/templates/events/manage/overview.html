@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Console · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+{% include "events/_milestones.html" %}
+
+<div class="stats">
+  <div class="stat"><div class="stat-num">{{ stats.teams }}</div><div class="stat-label">Teams</div></div>
+  <div class="stat"><div class="stat-num">{{ stats.participants }}</div><div class="stat-label">People on teams</div></div>
+  <div class="stat"><div class="stat-num">{{ stats.submitted }}</div><div class="stat-label">Submitted</div></div>
+  <div class="stat"><div class="stat-num">{{ stats.drafts }}</div><div class="stat-label">Still drafts</div></div>
+  <div class="stat"><div class="stat-num">{{ stats.teams_without_project }}</div><div class="stat-label">Teams, no project</div></div>
+  <div class="stat"><div class="stat-num">{{ stats.judges }}</div><div class="stat-label">Judges</div></div>
+</div>
+
+<div class="split">
+  <section>
+    <header class="block-head"><h2>Recent activity</h2><a href="{% url 'events:manage_activity' event.slug %}">Full log</a></header>
+    {% include "events/manage/_activity_list.html" with items=recent %}
+  </section>
+
+  <div class="side-col">
+    {% if duplicates %}
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Needs a decision</h2>
+      <p>These teams handed in more than one project. The repeat is hidden from the gallery until you choose which one counts.</p>
+      <ul class="plain">
+        {% for d in duplicates %}
+        <li>
+          <a href="{{ d.get_absolute_url }}">{{ d.title }} #{{ d.pk }}</a> by {{ d.team.name }} repeats <a href="{{ d.duplicate_of.get_absolute_url }}">#{{ d.duplicate_of.pk }}</a>.
+          <form class="inline" method="post" action="{% url 'events:promote_duplicate' event.slug d.pk %}" data-confirm="List #{{ d.pk }} in the gallery and hide #{{ d.duplicate_of.pk }} instead?">{% csrf_token %}<button class="linklike" type="submit">List #{{ d.pk }} instead</button></form>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <h2 class="panel-title">The deadline</h2>
+      <p>{% if event.is_closed %}Closed {% when event.submissions_close_at event %}. Nothing can be created or edited.{% elif event.is_open %}Open until {% when event.submissions_close_at event %}, which is <strong data-countdown="{{ event.submissions_close_at|iso }}" data-done="now">{{ event.submissions_close_at|until }}</strong> away.{% else %}Editing opens at kickoff, {% when event.starts_at event %}.{% endif %}</p>
+      <p>{% if refused_count %}<a href="{% url 'events:manage_activity' event.slug %}?only=refused">{{ refused_count }} attempt{{ refused_count|pluralize }}</a> to edit outside the window {{ refused_count|pluralize:"was,were" }} refused and logged.{% else %}No edits have been refused so far.{% endif %}</p>
+      <p><a href="{% url 'events:manage_details' event.slug %}">Change the dates</a></p>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Setup</h2>
+      <dl class="facts">
+        <div><dt><a href="{% url 'events:manage_tracks' event.slug %}">Tracks</a></dt><dd>{{ event.tracks.count }}</dd></div>
+        <div><dt><a href="{% url 'events:manage_prizes' event.slug %}">Prizes</a></dt><dd>{{ event.prizes.count }}</dd></div>
+        <div><dt><a href="{% url 'events:manage_questions' event.slug %}">Form questions</a></dt><dd>{{ event.questions.count }}</dd></div>
+        <div><dt><a href="{% url 'events:manage_details' event.slug %}">Published</a></dt><dd>{{ event.is_published|yesno:"yes,no" }}</dd></div>
+      </dl>
+    </section>
+  </div>
+</div>
+{% endblock %}

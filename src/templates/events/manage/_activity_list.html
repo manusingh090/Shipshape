@@ -1,0 +1,13 @@
+{% load ui %}
+{% if items %}
+<ul class="activity">
+  {% for item in items %}
+  <li{% if item.is_refusal %} class="refused"{% endif %}>
+    {% when item.created_at event %}
+    <span><strong>{{ item.actor.display_name|default:"Someone" }}</strong> {{ item.detail }}{% if item.project_id %} <a href="{% url 'projects:detail' item.project_id %}">(project)</a>{% endif %}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Nothing logged yet.</p>
+{% endif %}

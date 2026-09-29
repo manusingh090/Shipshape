@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Your account{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Your account</p>
+  <h1 class="display">{{ user.display_name }}</h1>
+  <p class="lede">{{ user.email }} · {{ user.get_platform_role_display }}{% if user.platform_role == 'member' %} (can join teams and be added as staff){% elif user.platform_role == 'organizer' %} (can create hackathons){% else %} (can manage every event and account){% endif %}</p>
+</header>
+
+<div class="layout-2">
+  <div>
+    <section class="block">
+      <header class="block-head"><h2>Your roles</h2></header>
+      {% if staff_roles or memberships %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Event</th><th>Role</th><th></th></tr></thead>
+          <tbody>
+            {% for r in staff_roles %}
+            <tr>
+              <td><a href="{{ r.event.get_absolute_url }}">{{ r.event.name }}</a></td>
+              <td>{{ r.get_role_display }}</td>
+              <td class="row-actions">{% if r.role == 'organizer' %}<a href="{% url 'events:manage' r.event.slug %}">Console</a>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            {% for m in memberships %}
+            <tr>
+              <td><a href="{{ m.event.get_absolute_url }}">{{ m.event.name }}</a></td>
+              <td>Participant, {{ m.get_role_display|lower }} of {{ m.team.name }}</td>
+              <td class="row-actions"><a href="{% url 'teams:mine' m.event.slug %}">Team</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">You haven't joined anything yet. <a href="{% url 'home' %}">Find a hackathon</a>.</p>
+      {% endif %}
+    </section>
+
+    <section class="block">
+      <header class="block-head"><h2>Where you're signed in</h2></header>
+      <ul class="roster">
+        {% for s in sessions %}
+        <li>
+          <span class="avatar" aria-hidden="true">{% if s.session_key == current_key %}&bull;{% else %}&nbsp;{% endif %}</span>
+          <span>
+            <span class="who">{{ s.device }}{% if s.session_key == current_key %} (this browser){% endif %}</span>
+            <span class="sub">{% if s.ip %}{{ s.ip }} · {% endif %}signed in {% when s.created_at %} · last seen {{ s.last_seen_at|since }} ago</span>
+          </span>
+          {% if s.session_key != current_key %}
+          <form method="post" action="{% url 'accounts:end_session' s.pk %}">{% csrf_token %}<button class="linklike danger" type="submit">Sign out</button></form>
+          {% else %}<span></span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% if sessions|length > 1 %}
+      <form method="post" action="{% url 'accounts:end_other_sessions' %}" data-confirm="Sign out every other browser and device?">
+        {% csrf_token %}
+        <p class="actions"><button class="btn btn-ghost btn-small" type="submit">Sign out everywhere else</button></p>
+      </form>
+      {% endif %}
+    </section>
+
+    {% if records %}
+    <section class="block" id="records">
+      <header class="block-head"><h2>Your certificates and records</h2><a href="{% url 'records:verify' %}">How they're checked</a></header>
+      <ul class="roster">
+        {% for r in records %}
+        <li>
+          <span class="avatar" aria-hidden="true">&#9733;</span>
+          <span><span class="who"><a href="{% url 'records:detail' r.code %}">{{ r.get_kind_display }}</a>{% if r.is_revoked %} <span class="small">(revoked)</span>{% endif %}</span><span class="sub">{{ r.event.name }} · {{ r.code }}</span></span>
+          <span class="small"><a href="{% url 'records:pdf' r.code %}">PDF</a></span>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section class="block" id="tokens">
+      <header class="block-head"><h2>API tokens</h2><a href="{% url 'api_docs' %}">API reference</a></header>
+      <p class="small">A token lets a script do anything you can do here, as you, through the <a href="{% url 'api_docs' %}">REST API</a>. Only a fingerprint of each is kept: the token itself is shown once. Changing your password revokes them all.</p>
+      {% if new_token %}
+      <div class="token-new" role="status">
+        <p><strong>Your new token.</strong> Copy it now; it won't be shown again.</p>
+        <div class="invite"><label class="sr-only" for="new-token">Token</label><input id="new-token" type="text" value="{{ new_token }}" readonly><button class="btn btn-small" type="button" data-copy="#new-token">Copy</button></div>
+        <p class="small mono">curl -H "Authorization: Bearer {{ new_token|slice:":10" }}…" {{ request.scheme }}://{{ request.get_host }}/api/v1/me</p>
+      </div>
+      {% endif %}
+      {% if tokens %}
+      <ul class="roster">
+        {% for t in tokens %}
+        <li>
+          <span class="avatar" aria-hidden="true">&#9679;</span>
+          <span><span class="who">{{ t.name }}</span><span class="sub">{{ t.prefix }}… · made {% when t.created_at %} · {% if t.last_used_at %}last used {{ t.last_used_at|since }} ago{% else %}never used{% endif %}</span></span>
+          <form method="post" action="{% url 'accounts:tokens' %}" data-confirm="Revoke “{{ t.name }}”? Scripts using it stop working at once.">{% csrf_token %}<input type="hidden" name="op" value="revoke"><input type="hidden" name="id" value="{{ t.pk }}"><button class="linklike danger" type="submit">Revoke</button></form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <form method="post" action="{% url 'accounts:tokens' %}" class="inline-form token-form">
+        {% csrf_token %}<input type="hidden" name="op" value="create">
+        <label class="sr-only" for="token-name">Token name</label>
+        <input id="token-name" type="text" name="name" maxlength="80" required placeholder="What it's for, e.g. results bot">
+        <button class="btn btn-small" type="submit">Make a token</button>
+      </form>
+    </section>
+  </div>
+
+  <aside class="side-col">
+    <section class="panel">
+      <h2 class="panel-title">Profile</h2>
+      <form method="post" action="{% url 'accounts:account' %}" novalidate>
+        {% csrf_token %}
+        {% include "_field.html" with field=profile_form.name %}
+        <button class="btn btn-small" type="submit">Save</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">Change password</h2>
+      <form method="post" action="{% url 'accounts:password' %}" novalidate>
+        {% csrf_token %}
+        {{ password_form.non_field_errors }}
+        {% for field in password_form %}{% include "_field.html" %}{% endfor %}
+        <button class="btn btn-small" type="submit">Change password</button>
+        <p class="help">Changing it signs you out of every other browser and revokes your API tokens.</p>
+      </form>
+    </section>
+  </aside>
+</div>
+{% endblock %}

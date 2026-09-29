@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Organizers · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<div class="split">
+  <section>
+    <header class="block-head"><h2>Organizers</h2></header>
+    <p class="small">Organizers can change everything in this console and see every judge's scores. They can't edit teams' projects, and they can't judge or compete in this event.</p>
+    <ul class="roster">
+      {% for staff in organizers %}
+      <li>
+        <span class="avatar" aria-hidden="true">{{ staff.user.initials }}</span>
+        <span><span class="who">{{ staff.user.display_name }}</span><span class="sub">{{ staff.user.email }}</span></span>
+        <form method="post" action="{% url 'events:manage_people_remove' event.slug staff.pk %}" data-confirm="Remove {{ staff.user.display_name }} as an organizer?">{% csrf_token %}<button class="linklike danger" type="submit">Remove</button></form>
+      </li>
+      {% empty %}
+      <li><span></span><span class="muted">No organizers. Platform admins can still manage this event.</span><span></span></li>
+      {% endfor %}
+    </ul>
+    <p class="small">Looking for judges? There {{ judge_count|pluralize:"is,are" }} {{ judge_count }}. Add, invite and assign them under <a href="{% url 'judging:judges' event.slug %}">Judging</a>.</p>
+  </section>
+
+  <section class="panel panel-strong">
+    <h2 class="panel-title">Add an organizer</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% include "_field.html" with field=form.email %}
+      <div class="actions"><button class="btn" type="submit">Add</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

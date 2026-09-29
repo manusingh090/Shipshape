@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Start a team · {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{{ event.get_absolute_url }}">{{ event.name }}</a> · teams</p>
+  <h1 class="display">Start a team</h1>
+</header>
+
+<div class="layout-2">
+  <div>
+    {% if viewer.is_staff %}
+      <div class="notice notice-warn"><p>You're {{ viewer.role_labels|join:" and "|lower }} for this event, so you can't compete in it.</p></div>
+    {% elif event.is_closed %}
+      <div class="notice notice-closed"><p>Submissions closed {% when event.submissions_close_at event %}, so teams are locked. Nobody can start, join or leave a team now.</p></div>
+    {% else %}
+      <form method="post" class="panel panel-strong">
+        {% csrf_token %}
+        <div class="field">
+          <label for="team-name">Team name</label>
+          <input id="team-name" type="text" name="name" maxlength="80" required autofocus placeholder="Something you won't mind seeing on a prize list">
+          <p class="help">You'll be the captain. You can rename it later.</p>
+        </div>
+        <div class="actions"><button class="btn" type="submit">Start the team</button></div>
+      </form>
+    {% endif %}
+  </div>
+  <aside class="side-col">
+    <section class="panel">
+      <h2 class="panel-title">How teams work here</h2>
+      <p>Each team gets a private invite link. Anyone signed in who opens it can join, up to {{ event.max_team_size }} people.</p>
+      <p>Got a link from a teammate already? Just open it; you don't need to start your own team.</p>
+      <p>You can be on one team per event. Teams lock when submissions close.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

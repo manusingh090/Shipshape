@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Your ballot · {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Community vote · <a href="{{ event.get_absolute_url }}">{{ event.name }}</a>{% if voter.email %} · voting as {{ voter.email }}{% elif voter.user %} · voting as {{ voter.user.display_name }}{% endif %}</p>
+  <h1 class="display">Your ballot</h1>
+  <p class="lede">{% if config.is_quadratic %}Spread {{ credits }} credits over the projects you'd like to see win. More votes on one project cost more: {% for n, c in cost_steps %}{{ n }} for {{ c }}{% if not forloop.last %}, {% endif %}{% endfor %}.{% else %}Pick the one project you'd most like to see win.{% endif %}</p>
+</header>
+
+{% if phase == 'not_open' %}<div class="notice"><p>Voting opens {% when opens_at event %}, once every project is final. You can look over the ballot now.</p></div>
+{% elif phase == 'closed' %}<div class="notice notice-closed"><p>Voting closed {% when config.closes_at event %}. {% if ballot %}This is the ballot you handed in.{% else %}You didn't vote.{% endif %}</p></div>{% endif %}
+{% if refusal %}<div class="notice notice-warn"><p>{{ refusal }}</p></div>{% endif %}
+{% if error %}<div class="notice notice-error" role="alert"><p><strong>Not saved.</strong> {{ error }}</p></div>{% endif %}
+
+<form method="post" class="ballot-form" data-ballot data-credits="{{ credits }}" data-quadratic="{{ config.is_quadratic|yesno:'1,0' }}">
+  {% csrf_token %}
+  <input type="hidden" name="op" value="save">
+  <div class="layout-2">
+    <fieldset{% if phase != 'open' or refusal %} disabled{% endif %}>
+      <legend class="sr-only">Projects</legend>
+      {% if not rows %}
+      <div class="empty"><p>No projects are on the ballot yet.</p></div>
+      {% else %}
+      <p class="ballot-count small muted">{{ rows|length }} projects, {% if config.order == 'shuffled' %}in an order shuffled just for you, so no project gains from being near the top. It stays the same when you come back{% else %}A to Z{% endif %}.{% if config.is_quadratic %} Leave a project at 0 if you don't want to back it.{% endif %} Titles open in a new tab.</p>
+      <ol class="ballot">
+        {% if not config.is_quadratic %}
+        <li class="ballot-row ballot-none">
+          <div class="ballot-main"><p class="ballot-title">No vote</p><p class="small muted">Leave this ballot blank.</p></div>
+          <div class="ballot-pick"><label class="box-choice"><input type="radio" name="pick" value=""{% if not picked %} checked{% endif %}><span aria-hidden="true"></span><span class="sr-only">No vote</span></label></div>
+        </li>
+        {% endif %}
+        {% for row in rows %}{% with p=row.project %}
+        <li class="ballot-row {{ p.track|track_class }}{% if row.own %} is-own{% endif %}{% if row.votes %} has-votes{% endif %}" data-ballot-row>
+          <div class="ballot-main">
+            <p class="ballot-title"><a href="{{ p.get_absolute_url }}" target="_blank" rel="noopener">{{ p.title }}</a></p>
+            <p class="ballot-by">{{ p.team.name }}{% if p.track %} · <span class="track-chip {{ p.track|track_class }}">{{ p.track.name }}</span>{% endif %}</p>
+            {% if p.tagline %}<p class="ballot-tagline">{{ p.tagline }}</p>{% endif %}
+            {% if row.own %}<p class="small"><strong>Your team's project.</strong> You can't vote for it.</p>{% endif %}
+          </div>
+          {% if config.is_quadratic %}
+          <div class="ballot-votes" role="radiogroup" aria-label="Votes for {{ p.title }}">
+            {% if ceiling <= 6 %}
+            <div class="marks marks-votes">
+              <label><input type="radio" name="p_{{ p.pk }}" value="0"{% if not row.votes %} checked{% endif %}{% if row.own %} disabled{% endif %} data-votes><span>0</span></label>
+              {% for n, c in cost_steps %}<label title="{{ n }} vote{{ n|pluralize }}, {{ c }} credit{{ c|pluralize }}"><input type="radio" name="p_{{ p.pk }}" value="{{ n }}"{% if row.votes == n %} checked{% endif %}{% if row.own %} disabled{% endif %} data-votes><span>{{ n }}</span></label>{% endfor %}
+            </div>
+            {% else %}
+            <label class="sr-only" for="v{{ p.pk }}">Votes for {{ p.title }}</label>
+            <input class="votes-input" id="v{{ p.pk }}" type="number" name="p_{{ p.pk }}" min="0" max="{{ ceiling }}" step="1" value="{{ row.votes }}"{% if row.own %} disabled{% endif %} data-votes>
+            {% endif %}
+            <p class="ballot-cost" data-cost>{% if row.votes %}{{ row.cost }} credit{{ row.cost|pluralize }}{% endif %}</p>
+          </div>
+          {% else %}
+          <div class="ballot-pick"><label class="box-choice"><input type="radio" name="pick" value="{{ p.pk }}"{% if picked == p.pk %} checked{% endif %}{% if row.own %} disabled{% endif %}><span aria-hidden="true"></span><span class="sr-only">Vote for {{ p.title }}</span></label></div>
+          {% endif %}
+        </li>
+        {% endwith %}{% endfor %}
+      </ol>
+      {% endif %}
+    </fieldset>
+
+    <aside class="side-col sticky">
+      <section class="panel panel-strong">
+        <h2 class="panel-title">{% if config.is_quadratic %}Your credits{% else %}Your vote{% endif %}</h2>
+        {% if config.is_quadratic %}
+        <p class="credit-left"><span data-left>{{ left }}</span> <span class="credit-of">left of {{ credits }}</span></p>
+        <progress class="meter-big" max="{{ credits }}" value="{{ spent }}" data-meter aria-label="Credits spent"></progress>
+        <p class="small" data-over hidden><strong class="over">Over budget.</strong> Take some votes off before saving.</p>
+        {% endif %}
+        {% if ballot %}<p class="small">Last saved {% when ballot.updated_at event %}.{% if phase == 'open' %} You can change it until voting closes.{% endif %}</p>
+        {% elif phase == 'open' %}<p class="small muted">Nothing saved yet.</p>{% endif %}
+        {% if phase == 'open' and not refusal %}
+        <p class="actions"><button class="btn" type="submit">Save my ballot</button></p>
+        {% endif %}
+        {% if config.closes_at %}<p class="small muted">Voting closes {% when config.closes_at event %}.</p>{% endif %}
+      </section>
+      <section class="panel">
+        <h2 class="panel-title">How it works</h2>
+        {% include "voting/_method.html" %}
+      </section>
+    </aside>
+  </div>
+</form>
+
+{% if voter.kind == 'email' and not voter.signed_in %}
+<form method="post" class="small">
+  {% csrf_token %}
+  <input type="hidden" name="op" value="forget">
+  <p>Not {{ voter.email }}? <button class="linklike" type="submit">Use a different address</button>. This ballot stays as it is.</p>
+</form>
+{% endif %}
+{% endblock %}

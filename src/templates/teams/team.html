@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}{{ team.name }} · {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{{ event.get_absolute_url }}">{{ event.name }}</a> · your team</p>
+  <h1 class="display">{{ team.name }}</h1>
+  <p class="lede">{{ memberships|length }} of {{ event.max_team_size }} seats taken.{% if event.is_closed %} The roster is locked because submissions have closed.{% endif %}</p>
+</header>
+
+<div class="layout-2">
+  <div>
+    <section class="block">
+      <header class="block-head"><h2>Members</h2></header>
+      <ul class="roster">
+        {% for m in memberships %}
+        <li>
+          <span class="avatar" aria-hidden="true">{{ m.user.initials }}</span>
+          <span>
+            <span class="who">{{ m.user.display_name }}{% if m.user == user %} (you){% endif %}</span>
+            <span class="sub">{{ m.user.email }} · {{ m.get_role_display|lower }} · joined {% when m.joined_at event "date" %}</span>
+          </span>
+          {% if is_captain and m.user != user and not event.is_closed %}
+            <form method="post" action="{% url 'teams:remove_member' event.slug m.user.pk %}" data-confirm="Take {{ m.user.display_name }} off the team?">{% csrf_token %}<button class="linklike danger" type="submit">Remove</button></form>
+          {% else %}<span></span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="block">
+      <header class="block-head"><h2>The project</h2></header>
+      {% if project %}
+        <p><a href="{{ project.get_absolute_url }}"><strong>{{ project.title }}</strong></a> <span class="stamp stamp-{{ project.status }}">{{ project.get_status_display }}</span></p>
+        {% if project.tagline %}<p class="muted">{{ project.tagline }}</p>{% endif %}
+      {% else %}
+        <p class="muted">Nothing saved yet.</p>
+      {% endif %}
+      <p class="actions">
+        {% if event.is_open %}<a class="btn" href="{% url 'projects:edit' event.slug %}">{% if project %}Edit the submission{% else %}Start the submission{% endif %}</a>
+        {% elif event.is_closed %}<a class="btn btn-ghost" href="{% url 'projects:edit' event.slug %}">What you handed in</a>
+        {% else %}<span class="small muted">Project editing opens at kickoff, {% when event.starts_at event %}.</span>{% endif %}
+      </p>
+    </section>
+
+    {% if history %}
+    <section class="block">
+      <header class="block-head"><h2>History</h2></header>
+      <ol class="history">
+        {% for item in history %}<li{% if item.is_refusal %} class="refused"{% endif %}>{% when item.created_at event %}{{ item.actor.display_name|default:"Someone" }} {{ item.detail }}</li>{% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="side-col sticky">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Invite link</h2>
+      {% if event.is_closed %}
+        <p class="muted">Invites stopped working when submissions closed.</p>
+      {% else %}
+        <div class="seat-row" aria-label="{{ memberships|length }} of {{ event.max_team_size }} seats taken">
+          {% for m in memberships %}<span class="seat taken"></span>{% endfor %}{% for seat in empty_seats %}<span class="seat"></span>{% endfor %}
+        </div>
+        {% if seats_left %}
+          <p>Send this to your teammates. Anyone signed in who opens it can join.</p>
+          <div class="invite">
+            <label class="sr-only" for="invite-url">Invite link</label>
+            <input id="invite-url" type="text" value="{{ invite_url }}" readonly>
+            <button class="btn btn-small" type="button" data-copy="#invite-url">Copy</button>
+          </div>
+        {% else %}
+          <p>The team is full. The link stops working until someone leaves.</p>
+        {% endif %}
+        {% if is_captain %}
+          <form method="post" action="{% url 'teams:reset_invite' event.slug %}" data-confirm="Make a new link? The current one will stop working.">{% csrf_token %}<button class="linklike small" type="submit">Make a new link (the old one stops working)</button></form>
+        {% endif %}
+      {% endif %}
+    </section>
+
+    {% if not event.is_closed %}
+    <section class="panel">
+      <h2 class="panel-title">Team settings</h2>
+      {% if is_captain %}
+      <form method="post" action="{% url 'teams:rename' event.slug %}">
+        {% csrf_token %}
+        <div class="field">
+          <label for="rename">Team name</label>
+          <input id="rename" type="text" name="name" value="{{ team.name }}" maxlength="80" required>
+        </div>
+        <button class="btn btn-ghost btn-small" type="submit">Rename</button>
+      </form>
+      <hr>
+      {% endif %}
+      <form method="post" action="{% url 'teams:leave' event.slug %}" data-confirm="{% if memberships|length == 1 %}You're the only member. Leaving deletes the team and its project. Leave anyway?{% else %}Leave {{ team.name }}?{% endif %}">
+        {% csrf_token %}
+        <button class="btn btn-danger btn-small" type="submit">Leave the team</button>
+        <p class="help">{% if memberships|length == 1 %}You're the last member, so leaving deletes the team and its project.{% elif is_captain %}The longest-serving member becomes captain.{% endif %}</p>
+      </form>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

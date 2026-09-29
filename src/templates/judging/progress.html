@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Judging progress · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+{% include "judging/_subnav.html" %}
+<div data-live="{{ request.path }}?fragment=1" data-live-every="10" aria-live="polite">
+  {% include "judging/_progress_live.html" %}
+</div>
+{% endblock %}

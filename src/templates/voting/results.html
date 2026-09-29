@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Community vote results · {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Community vote · <a href="{{ event.get_absolute_url }}">{{ event.name }}</a></p>
+  <h1 class="display">{% if state == 'published' %}The community's pick{% else %}Results{% endif %}</h1>
+  {% if state == 'published' %}
+  <p class="lede">Voting closed {% when config.closes_at event %}. {{ tally.voted }} {{ tally.voted|pluralize:"person,people" }} voted{% if config.is_quadratic %}, spreading {{ credits }} credits each{% endif %}.</p>
+  {% endif %}
+</header>
+
+{% if preview %}
+<div class="notice notice-warn"><p><strong>Organizer preview.</strong> {% if state == 'hidden' %}Voting is still open, so nobody else can see this, not even the turnout.{% else %}Voting has closed. Nobody else can see this until you publish it from <a href="{% url 'voting:manage' event.slug %}">the voting page</a>.{% endif %}</p></div>
+{% endif %}
+
+{% if not tally %}
+  <div class="empty">
+    {% if state == 'hidden' %}
+    <p>Results stay hidden while voting is open{% if config.closes_at %}, until {% when config.closes_at event %}{% endif %}, so nobody can see who's ahead and pile on. Then the organizers look over the ballots and publish them here.</p>
+    {% else %}
+    <p>Voting has closed. The organizers are looking over the ballots before they publish the results here.</p>
+    {% endif %}
+  </div>
+{% elif not tally.voted %}
+  <div class="empty"><p>Nobody voted.</p></div>
+{% else %}
+  <div class="table-wrap">
+    <table class="table results-table">
+      <thead><tr><th class="num">#</th><th>Project</th><th class="num">Votes</th><th class="num">Backers</th><th class="w-meter">Share</th></tr></thead>
+      <tbody>
+        {% for line in tally.lines %}{% if line.votes %}
+        <tr>
+          <td class="num rank">{{ line.rank }}</td>
+          <td><a href="{{ line.project.get_absolute_url }}"><strong>{{ line.project.title }}</strong></a><br><span class="small muted">{{ line.project.team.name }}{% if line.project.track %} · {{ line.project.track.name }}{% endif %}</span></td>
+          <td class="num"><strong>{{ line.votes }}</strong></td>
+          <td class="num">{{ line.supporters }}</td>
+          <td><progress max="100" value="{{ line.bar }}" aria-label="{{ line.share }} percent of all votes"></progress> <span class="mono small">{{ line.share }}%</span></td>
+        </tr>
+        {% endif %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="help">Ranked by votes, then by how many people backed the project. Projects nobody voted for aren't listed. {% if config.is_quadratic %}Votes were quadratic: n votes on one project cost n × n credits, with at most {{ ceiling }} per project from one ballot.{% endif %} Community votes are separate from the judges' scores.</p>
+{% endif %}
+{% endblock %}

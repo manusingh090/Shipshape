@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Scoring {{ project.title }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{% url 'judging:queue' event.slug %}">Your queue</a> · {{ event.name }}{% if position %} · {{ position }} of {{ count }}{% endif %}</p>
+  <h1 class="display">{{ project.title }}</h1>
+  {% if project.tagline %}<p class="lede">{{ project.tagline }}</p>{% endif %}
+  <p class="project-byline">By <strong>{{ project.team.name }}</strong>{% if project.track %} · <span class="track-chip {{ project.track|track_class }}">{{ project.track.name }}</span>{% endif %}</p>
+</header>
+
+{% if error %}<div class="notice notice-error" role="alert"><p><strong>Not saved.</strong> {{ error }}</p></div>{% endif %}
+{% if project.duplicate_of_id %}<div class="notice notice-warn"><p>The organizers flagged this as a repeat of another submission from the same team. Your score is kept, but it won't count unless they list this one instead.</p></div>{% endif %}
+{% if phase == 'not_open' %}<div class="notice"><p>Judging opens when submissions close, {% when event.submissions_close_at event %}.</p></div>
+{% elif phase == 'closed' %}<div class="notice notice-closed"><p>Judging ended {% when event.judging_ends_at event %}. This scorecard is read-only.</p></div>{% endif %}
+
+<div class="layout-2">
+  <div>
+    {% if project.thumbnail or images %}
+    <section class="shots" aria-label="Images">
+      {% if project.thumbnail %}<div class="shots-main"><img src="{% url 'media' project.thumbnail %}" alt="Thumbnail for {{ project.title }}"></div>{% endif %}
+      {% if images %}<div class="shots-grid">{% for image in images %}<a href="{% url 'media' image.path %}" target="_blank" rel="noopener"><img src="{% url 'media' image.path %}" alt="Screenshot {{ forloop.counter }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
+    </section>
+    {% endif %}
+    <section class="block">
+      <header class="block-head"><h2>The project, as submitted</h2></header>
+      <div class="prose">{% if project.description %}{{ project.description|markdown }}{% else %}<p class="muted">The team didn't write a longer description.</p>{% endif %}</div>
+    </section>
+    {% if answers %}
+    <section class="block">
+      <header class="block-head"><h2>Answers to the form questions</h2></header>
+      <dl class="answers">{% for a in answers %}<div><dt>{{ a.question.prompt }}</dt><dd>{{ a.display_value|linebreaksbr }}</dd></div>{% endfor %}</dl>
+    </section>
+    {% endif %}
+    <section class="block">
+      <header class="block-head"><h2>Team</h2></header>
+      <ul class="plain people">{% for m in members %}<li><span class="avatar" aria-hidden="true">{{ m.user.initials }}</span>{{ m.user.display_name }}</li>{% endfor %}</ul>
+    </section>
+  </div>
+
+  <aside class="side-col sticky">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Your scorecard</h2>
+      {% if score.submitted_at %}<p class="small">Submitted {% when score.submitted_at event %}.{% if phase == 'open' %} You can change it until judging ends; every version is kept.{% endif %}</p>
+      {% elif score %}<p class="small">Draft saved {% when score.updated_at event %}. Drafts don't count until you submit.</p>{% endif %}
+      {% if not form_rows %}
+      <p class="muted">The organizers haven't set up the rubric yet.</p>
+      {% else %}
+      <form method="post" data-scorecard>
+        {% csrf_token %}
+        <fieldset{% if phase != 'open' %} disabled{% endif %}>
+          {% for row in form_rows %}
+          <fieldset class="criterion" data-criterion data-weight="{{ row.weight|stringformat:'f' }}">
+            <legend>{{ row.criterion.label }} <span class="weight-note">{{ row.share }}% of the score</span></legend>
+            {% if row.criterion.description %}<p class="help">{{ row.criterion.description }}</p>{% endif %}
+            <div class="marks">
+              {% for mark in scale %}<label><input type="radio" name="c_{{ row.criterion.pk }}" value="{{ mark }}"{% if row.value == mark %} checked{% endif %}><span>{{ mark }}</span></label>{% endfor %}
+            </div>
+          </fieldset>
+          {% endfor %}
+          <div class="field">
+            <label for="comment">Notes for the organizers <span class="opt">optional</span></label>
+            <textarea id="comment" name="comment" rows="4">{{ comment }}</textarea>
+            <div class="help">Only organizers read these. Not the team, not other judges.</div>
+          </div>
+        </fieldset>
+        <p class="total-line">Weighted score <span data-total>{% if total is not None %}{{ total|floatformat:2 }}{% else %}&hellip;{% endif %}</span></p>
+        {% if phase == 'open' %}
+        <div class="actions">
+          {% if not score.submitted_at %}<button class="btn btn-ghost" type="submit" name="action" value="draft">Save draft</button>{% endif %}
+          <button class="btn" type="submit" name="action" value="submit">{% if score.submitted_at %}Update score{% else %}Submit score{% endif %}</button>
+          {% if upcoming and not score.submitted_at %}<button class="btn btn-ghost" type="submit" name="action" value="submit_next">Submit, then next</button>{% endif %}
+        </div>
+        {% endif %}
+      </form>
+      {% endif %}
+    </section>
+
+    {% if project.demo_video_url or project.repo_url or project.live_url %}
+    <section class="panel">
+      <h2 class="panel-title">Links</h2>
+      <ul class="link-list">
+        {% if project.demo_video_url %}<li><a href="{{ project.demo_video_url }}" rel="nofollow ugc noopener noreferrer" target="_blank"><span class="link-kind">Demo video</span><span class="link-host">{{ project.demo_video_url|hostname }}</span></a></li>{% endif %}
+        {% if project.repo_url %}<li><a href="{{ project.repo_url }}" rel="nofollow ugc noopener noreferrer" target="_blank"><span class="link-kind">Source code</span><span class="link-host">{{ project.repo_url|hostname }}</span></a></li>{% endif %}
+        {% if project.live_url %}<li><a href="{{ project.live_url }}" rel="nofollow ugc noopener noreferrer" target="_blank"><span class="link-kind">Try it live</span><span class="link-host">{{ project.live_url|hostname }}</span></a></li>{% endif %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if phase == 'open' and not score.submitted_at %}
+    <details class="reveal panel">
+      <summary>I have a conflict of interest</summary>
+      <form method="post" action="{% url 'judging:conflict' event.slug project.pk %}">
+        {% csrf_token %}
+        <div class="field">
+          <label for="reason">Why, in a few words</label>
+          <input id="reason" type="text" name="reason" maxlength="200" required placeholder="I mentored this team">
+        </div>
+        <button class="btn btn-danger btn-small" type="submit">Step away from this project</button>
+        <p class="help">It comes off your queue and the organizers can give it to someone else. They'll see your reason.</p>
+      </form>
+    </details>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

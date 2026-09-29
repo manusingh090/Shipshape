@@ -1,0 +1,1 @@
+<form method="post" action="{{ request.path }}" data-confirm="Delete this {{ noun }}? This can't be undone.">{% csrf_token %}<input type="hidden" name="op" value="delete"><input type="hidden" name="id" value="{{ item.pk }}"><button class="linklike danger" type="submit">Delete</button></form>

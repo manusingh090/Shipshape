@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}CSV exports · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<section class="block">
+  <header class="block-head"><h2>One CSV file per stage</h2></header>
+  <p class="small">One file per stage of the event, generated from the live data when you click. Only organizers can download them. Text that starts like a spreadsheet formula (=, +, - or @) gets a leading apostrophe, so a project name can't run as a formula when the file is opened in Excel.</p>
+  <ul class="export-list">
+    {% for key, label, note, url in stages %}
+    <li>
+      <div><strong>{{ label }}</strong><br><span class="small muted">{{ note }}</span></div>
+      <a class="btn btn-ghost btn-small" href="{{ url }}" download>{{ key }}.csv</a>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="help">The same files are available to scripts at <span class="mono">/api/events/{{ event.slug }}/export/&lt;name&gt;.csv</span> with an organizer's session cookie.</p>
+</section>
+{% endblock %}

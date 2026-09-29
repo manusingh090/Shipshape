@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Activity · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<div class="audit-bar">
+  <nav class="filter-links" aria-label="Filter activity">
+    {% for key, label in categories %}<a href="?only={{ key }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" {% if only == key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+  </nav>
+  <form method="get" class="inline-form" role="search">
+    <input type="hidden" name="only" value="{{ only }}">
+    <label class="sr-only" for="audit-q">Search the log</label>
+    <input id="audit-q" type="search" name="q" value="{{ q }}" placeholder="A name, an email, a project, a word">
+    <button class="btn btn-small" type="submit">Search</button>
+  </form>
+</div>
+<p class="small">The event's audit trail: server timestamps, newest first, never edited. Refused lines are things the portal said no to (a late edit, a rate limit); they never took effect. {{ page.paginator.count }} entr{{ page.paginator.count|pluralize:"y,ies" }}{% if only or q %} match{% endif %}. <a href="{% url 'judging:export' event.slug 'audit-log' %}">Download the whole log as CSV</a>.</p>
+{% include "events/manage/_activity_list.html" with items=page.object_list %}
+{% include "_pagination.html" %}
+{% endblock %}

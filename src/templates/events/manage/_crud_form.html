@@ -1,0 +1,14 @@
+<section class="panel{% if editing %} panel-strong{% endif %}" id="editor">
+  <h2 class="panel-title">{% if editing %}Edit {{ noun }}{% else %}Add a {{ noun }}{% endif %}</h2>
+  <form method="post" action="{{ request.path }}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="op" value="save">
+    {% if editing %}<input type="hidden" name="id" value="{{ editing.pk }}">{% endif %}
+    {{ form.non_field_errors }}
+    {% for field in form %}{% include "_field.html" %}{% endfor %}
+    <div class="actions">
+      <button class="btn" type="submit">{% if editing %}Save{% else %}Add {{ noun }}{% endif %}</button>
+      {% if editing %}<a href="{{ request.path }}">Cancel</a>{% endif %}
+    </div>
+  </form>
+</section>

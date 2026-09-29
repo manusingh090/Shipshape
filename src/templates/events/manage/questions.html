@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Form questions · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<div class="split">
+  <section>
+    <header class="block-head"><h2>Questions on the submission form</h2></header>
+    <p class="small">Every submission already has a name, tagline, description, thumbnail, image gallery, demo video link, repository link, live link, tech tags and track. Add anything else you need here.</p>
+    {% if event.is_closed %}<div class="notice notice-warn"><p>Submissions are closed, so teams can't answer new questions any more.</p></div>{% endif %}
+    {% if items %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th class="num">#</th><th>Question</th><th>Type</th><th>Rules</th><th></th></tr></thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="num">{{ item.position }}</td>
+            <td><strong>{{ item.prompt }}</strong>{% if item.help_text %}<br><span class="small muted">{{ item.help_text }}</span>{% endif %}{% if item.option_list %}<br><span class="small">Options: {{ item.option_list|join:", " }}</span>{% endif %}</td>
+            <td>{{ item.get_kind_display }}</td>
+            <td class="small">{% if item.required %}<span class="req">required</span><br>{% endif %}{% if item.is_public %}public{% else %}organizers only{% endif %}</td>
+            <td class="row-actions"><a href="?edit={{ item.pk }}#editor">Edit</a>{% include "events/manage/_delete_button.html" with noun="question" %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="help">Deleting a question deletes the answers teams already gave to it.</p>
+    {% else %}
+    <div class="empty"><p>No extra questions. The standard fields will do.</p></div>
+    {% endif %}
+  </section>
+  <div>{% include "events/manage/_crud_form.html" with noun="question" %}</div>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Check a certificate{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Certificates and records</p>
+  <h1 class="display">Check a certificate</h1>
+  <p class="lede">Every certificate and judge's record from this portal is signed. Type the code printed on it, or paste its signed JSON file to check the signature here.</p>
+</header>
+<div class="layout-2">
+  <div>
+    {% if result %}
+    <div class="record-status {% if result.ok %}is-valid{% else %}is-invalid{% endif %}" role="status">
+      {% if result.ok %}<p><strong>Genuine.</strong> Signed with this portal's key: {{ result.record.recipient }}, {{ result.record.title|lower }}, {{ result.record.event.name }}.</p>
+      {% else %}<p><strong>Doesn't check out.</strong> {{ result.reasons|join:" " }}</p>{% endif %}
+    </div>
+    {% endif %}
+    <section class="block">
+      <header class="block-head"><h2>Check a record code</h2></header>
+      <form method="post" class="inline-form">{% csrf_token %}
+        <label class="sr-only" for="code">Record code</label>
+        <input id="code" type="text" name="code" placeholder="ABCD-EFGH-JKLM-NPQR" autocomplete="off" class="mono">
+        <button class="btn btn-small" type="submit">Look it up</button>
+      </form>
+    </section>
+    <section class="block">
+      <header class="block-head"><h2>Check a signed file</h2></header>
+      <form method="post">{% csrf_token %}
+        <div class="field"><label for="document">The .json file's contents</label><textarea id="document" name="document" rows="8" class="mono">{{ pasted }}</textarea></div>
+        <button class="btn btn-small" type="submit">Check the signature</button>
+      </form>
+    </section>
+  </div>
+  <aside class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">This portal's public key</h2>
+      <p class="mono small break">{{ public_key }}</p>
+      <p class="small">Key id <span class="mono">{{ key_id }}</span>, printed on every certificate. With this key, anyone can check a record without this portal: <span class="mono">python src/records/verify.py record.json --key {{ public_key|slice:":12" }}…</span></p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

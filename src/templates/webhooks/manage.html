@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Webhooks{% if event %} · {{ event.name }}{% endif %}{% endblock %}
+{% block content %}
+{% if platform %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{% url 'accounts:admin' %}">Platform admin</a></p>
+  <h1 class="display">Platform webhooks</h1>
+  <p class="lede">They hear the platform audit log: new accounts, sign-in lockouts, sign-up limits, admins changing accounts. Each event's own webhooks are in its console.</p>
+</header>
+{% else %}
+{% include "events/manage/_head.html" %}
+<p class="lede-small">A webhook sends what happens in {{ event.name }} to a URL of yours as it happens: a chat channel, a spreadsheet script, a screen at the venue. Everything that goes into the <a href="{% url 'events:manage_activity' event.slug %}">activity log</a> can be sent, in the same words. Ballots aren't: nothing about votes leaves the portal before results are published.</p>
+{% endif %}
+
+<div class="split split-wide">
+  <section>
+    {% for row in rows %}{% with h=row.hook %}
+    <article class="panel webhook{% if not h.is_active %} is-off{% endif %}" id="hook-{{ h.pk }}">
+      <header class="webhook-head">
+        <div>
+          <p class="mono webhook-url">{{ h.url }}</p>
+          <p class="small muted">{% if h.description %}{{ h.description }} · {% endif %}sends {% if 'all' in h.category_list %}everything{% else %}{{ h.categories|cut:","|default:"nothing" }}{% endif %} · added {% when h.created_at event %}</p>
+        </div>
+        <span class="stamp {% if h.is_active %}stamp-open{% else %}stamp-closed{% endif %}">{% if h.is_active %}On{% else %}Off{% endif %}</span>
+      </header>
+      {% if h.disabled_reason and not h.is_active %}<div class="notice notice-warn"><p>{{ h.disabled_reason }} Fix the receiver, then switch it back on.</p></div>{% endif %}
+
+      <div class="actions webhook-actions">
+        <form method="post" class="inline">{% csrf_token %}<input type="hidden" name="id" value="{{ h.pk }}"><button class="btn btn-small" name="op" value="test">Send a test</button></form>
+        <form method="post" class="inline">{% csrf_token %}<input type="hidden" name="id" value="{{ h.pk }}"><button class="btn btn-ghost btn-small" name="op" value="{% if h.is_active %}off{% else %}on{% endif %}">Switch {% if h.is_active %}off{% else %}on{% endif %}</button></form>
+        <form method="post" class="inline" data-confirm="Delete this webhook? Its delivery log goes with it.">{% csrf_token %}<input type="hidden" name="id" value="{{ h.pk }}"><button class="linklike danger" name="op" value="delete">Delete</button></form>
+      </div>
+
+      <details class="reveal">
+        <summary class="small">Signing secret and how to check it</summary>
+        <div class="invite"><label class="sr-only" for="secret-{{ h.pk }}">Secret</label><input id="secret-{{ h.pk }}" type="text" value="{{ h.secret }}" readonly><button class="btn btn-small" type="button" data-copy="#secret-{{ h.pk }}">Copy</button></div>
+        <p class="small">Every delivery has <span class="mono">Shipshape-Signature: t=&lt;time&gt;,v1=&lt;hex&gt;</span>: an HMAC-SHA256, with this secret, of <span class="mono">"&lt;time&gt;." + the request body</span>. Recompute it, compare in constant time, and refuse anything more than 5 minutes old.</p>
+        <form method="post" class="inline" data-confirm="Make a new secret? Deliveries signed with the old one stop matching straight away.">{% csrf_token %}<input type="hidden" name="id" value="{{ h.pk }}"><button class="linklike" name="op" value="rotate">Make a new secret</button></form>
+        {% if row.self_test != h.url %}
+        · <form method="post" class="inline">{% csrf_token %}<input type="hidden" name="id" value="{{ h.pk }}"><button class="linklike" name="op" value="use_receiver">Point it at the built-in test receiver</button></form>
+        <p class="help">No network? The portal has a receiver of its own that checks signatures exactly like yours should, at <span class="mono">{{ row.self_test }}</span>.</p>
+        {% endif %}
+      </details>
+
+      <details class="reveal">
+        <summary class="small">Edit</summary>
+        <form method="post" novalidate>
+          {% csrf_token %}<input type="hidden" name="op" value="save"><input type="hidden" name="id" value="{{ h.pk }}">
+          {% for field in row.edit_form %}{% include "_field.html" %}{% endfor %}
+          <button class="btn btn-small" type="submit">Save</button>
+        </form>
+      </details>
+
+      <h3 class="sub-head">Recent deliveries</h3>
+      {% if row.deliveries %}
+      <div class="table-wrap">
+        <table class="table deliveries">
+          <thead><tr><th>What</th><th>Result</th><th class="num">Tries</th><th>Answer</th><th></th></tr></thead>
+          <tbody>
+            {% for d in row.deliveries %}
+            <tr>
+              <td><span class="mono small">{{ d.kind }}</span><br><span class="small muted">{% when d.created_at event %}</span></td>
+              <td><span class="stamp stamp-d-{{ d.status }}">{{ d.get_status_display }}</span>{% if d.status == 'pending' and d.attempts %}<br><span class="small muted">next try {% when d.next_attempt_at event %}</span>{% endif %}</td>
+              <td class="num">{{ d.attempts }}</td>
+              <td class="small">{% if d.last_status %}<span class="mono">{{ d.last_status }}</span>{% if d.last_duration_ms is not None %} in {{ d.last_duration_ms }} ms{% endif %}{% endif %}{% if d.last_error %} {{ d.last_error }}{% endif %}{% if d.response_excerpt %}<br><span class="mono muted break">{{ d.response_excerpt|truncatechars:120 }}</span>{% endif %}</td>
+              <td class="row-actions">{% if d.status != 'pending' %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ h.pk }}"><input type="hidden" name="delivery" value="{{ d.pk }}"><button class="linklike" name="op" value="redeliver">Send again</button></form>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="small muted">Nothing sent yet.</p>
+      {% endif %}
+    </article>
+    {% endwith %}{% empty %}
+    <div class="empty"><p>No webhooks yet. Add one on the right.</p></div>
+    {% endfor %}
+  </section>
+
+  <aside class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Add a webhook</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}<input type="hidden" name="op" value="create">
+        {{ form.non_field_errors }}
+        {% for field in form %}{% include "_field.html" %}{% endfor %}
+        <button class="btn btn-small" type="submit">Add webhook</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">How delivery works</h2>
+      <p class="small">A JSON POST with the entry's type, time, who did it, what happened and the team or project it concerns. Headers: <span class="mono">Shipshape-Event</span>, <span class="mono">Shipshape-Delivery</span> (unique, so you can ignore repeats) and the signature.</p>
+      <p class="small">Answer with any 2xx. Anything else is tried again after {{ backoff|join:", " }} minutes, then given up. {{ disable_after }} given-up deliveries in a row switch the webhook off. Redirects aren't followed, and addresses on the server itself are refused.</p>
+      <p class="small">Scripts can manage webhooks too: see the <a href="{% url 'api_docs' %}">API reference</a>.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

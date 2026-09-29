@@ -1,0 +1,47 @@
+{% load ui %}
+<section class="panel panel-strong">
+  <h2 class="panel-title">Your part</h2>
+  {% if not viewer.signed_in and event.is_closed %}
+    <p>Submissions have closed, so teams are locked. The projects are in the gallery.</p>
+    <p class="actions"><a class="btn" href="{% url 'projects:event_gallery' event.slug %}">Browse the projects</a></p>
+  {% elif not viewer.signed_in %}
+    <p>Sign in to start a team, or open the invite link a teammate sent you.</p>
+    <p class="actions">
+      <a class="btn" href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}">Sign in</a>
+      <a class="btn btn-ghost" href="{% url 'accounts:signup' %}?next={{ request.path|urlencode }}">Create account</a>
+    </p>
+  {% else %}
+    {% if viewer.is_organizer %}
+      <p>You can run this event{% if viewer.is_admin and not viewer.is_event_organizer %} as a platform admin{% endif %}.</p>
+      <p class="actions"><a class="btn" href="{% url 'events:manage' event.slug %}">Organizer console</a></p>
+    {% endif %}
+    {% if viewer.is_judge %}
+      <p>You're one of the judges here. Your queue holds the projects assigned to you, in your tracks.</p>
+      <p class="actions"><a class="btn" href="{% url 'judging:queue' event.slug %}">Open your judging queue</a></p>
+    {% endif %}
+    {% if viewer.team %}
+      <p>You're on <strong><a href="{% url 'teams:mine' event.slug %}">{{ viewer.team.name }}</a></strong>.</p>
+      {% if project %}
+        <p><a href="{{ project.get_absolute_url }}">{{ project.title }}</a> <span class="stamp stamp-{{ project.status }}">{{ project.get_status_display }}</span></p>
+      {% else %}
+        <p class="muted">Your team hasn't saved a project yet.</p>
+      {% endif %}
+      <p class="actions">
+        {% if event.is_open %}
+          <a class="btn" href="{% url 'projects:edit' event.slug %}">{% if project %}Edit submission{% else %}Start the submission{% endif %}</a>
+        {% elif event.is_closed %}
+          <a class="btn btn-ghost" href="{% url 'projects:edit' event.slug %}">What you handed in</a>
+        {% endif %}
+        <a class="btn btn-ghost" href="{% url 'teams:mine' event.slug %}">Team page</a>
+      </p>
+      {% if event.is_upcoming %}<p class="small muted">Project editing opens at kickoff, {% when event.starts_at event %}.</p>{% endif %}
+    {% elif not viewer.is_staff %}
+      {% if event.is_closed %}
+        <p class="muted">Submissions are closed, so teams are locked.</p>
+      {% else %}
+        <p>You're not on a team yet. Start one and share its invite link, or open an invite someone sent you.</p>
+        <p class="actions"><a class="btn" href="{% url 'teams:mine' event.slug %}">Start a team</a></p>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+</section>

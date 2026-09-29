@@ -1,0 +1,5 @@
+{% extends "errors/_base.html" %}
+{% block title %}Not allowed{% endblock %}
+{% block code %}403 · NOT ALLOWED{% endblock %}
+{% block headline %}That's not yours to open.{% endblock %}
+{% block body %}<p class="lede">{% if message %}{{ message }}{% else %}Your account doesn't have permission for this page.{% endif %}</p>{% if not user.is_authenticated %}<p><a href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}">Sign in</a> if you have an account that can.</p>{% endif %}{% endblock %}

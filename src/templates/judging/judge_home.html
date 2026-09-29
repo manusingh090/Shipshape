@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Judging{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Judging</p>
+  <h1 class="display">Your judging</h1>
+  <p class="lede">You only ever see the projects assigned to you, in your own tracks. Nobody else's marks are shown to you, and yours aren't shown to other judges.</p>
+</header>
+{% if events %}
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Event</th><th>Your tracks</th><th class="w-meter">Queue</th><th>Judging</th><th></th></tr></thead>
+    <tbody>
+      {% for item in events %}
+      <tr>
+        <td><strong>{{ item.event.name }}</strong></td>
+        <td class="small">{% if item.role.all_tracks %}every track{% else %}{% for t in item.role.tracks.all %}{{ t.name }}{% if not forloop.last %}, {% endif %}{% empty %}none yet{% endfor %}{% endif %}</td>
+        <td><progress max="{{ item.total|default:1 }}" value="{{ item.done }}" aria-label="{{ item.done }} of {{ item.total }}"></progress> <span class="mono small">{{ item.done }}/{{ item.total }}</span></td>
+        <td class="small">{% if item.phase == 'open' %}<span class="stamp stamp-open">Open</span>{% elif item.phase == 'not_open' %}<span class="stamp stamp-upcoming">Not yet</span>{% else %}<span class="stamp stamp-closed">Closed</span>{% endif %}</td>
+        <td class="row-actions"><a class="btn btn-small" href="{% url 'judging:queue' item.event.slug %}">Open queue</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty"><p>You aren't judging anything yet. Organizers add judges, or send an invite link.</p></div>
+{% endif %}
+{% endblock %}

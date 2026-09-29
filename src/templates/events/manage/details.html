@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Details · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+{% if event.is_closed %}
+<div class="notice notice-warn"><p><strong>Submissions are closed.</strong> Moving the deadline later reopens the form for every team. That's allowed (it's how you grant an extension) and it goes in the activity log.</p></div>
+{% endif %}
+<div class="layout-2">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "events/_event_form_fields.html" %}
+    <div class="form-actions sticky-actions">
+      <button class="btn" type="submit">Save details</button>
+    </div>
+  </form>
+  <aside class="side-col">
+    <section class="panel">
+      <h2 class="panel-title">How the dates work</h2>
+      <p><strong>Kickoff</strong> opens project editing. Teams can form before it.</p>
+      <p><strong>The deadline</strong> is enforced by the server on every save, upload and roster change. The countdown people see is only a display.</p>
+      <p><strong>Judging and results</strong> are informational for now.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

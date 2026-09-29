@@ -1,0 +1,42 @@
+{% load static ui %}<!doctype html>
+<html lang="en" class="embed theme-{{ opts.theme }}"{% if opts.id %} data-embed-id="{{ opts.id }}"{% endif %}>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Projects · {{ event.name }}</title>
+  <base target="_blank">
+  <link rel="stylesheet" href="{% static 'css/site.css' %}">
+  <script src="{% static 'js/embed-frame.js' %}" defer></script>
+</head>
+<body class="embed-body">
+  <header class="embed-head">
+    <p class="embed-title"><a href="{{ event_url }}" rel="noopener">{{ event.name }}</a></p>
+    <p class="embed-count mono">{{ total }} project{{ total|pluralize }}{% if opts.sort == "shuffle" and total > projects|length %}, {{ projects|length }} at random{% endif %}</p>
+  </header>
+  {% if projects %}
+  <ul class="embed-grid">
+    {% for project in projects %}
+    <li class="{{ project.track|track_class }}">
+      <a class="embed-card" href="{{ base }}{{ project.get_absolute_url }}" rel="noopener">
+        {% if project.thumbnail %}
+        <span class="embed-thumb"><img src="{{ base }}{% url 'media' project.thumbnail %}" alt="" loading="lazy"></span>
+        {% else %}
+        <span class="cover {{ project|cover_variant }} embed-cover" aria-hidden="true"><span class="cover-band">{{ project.track.name|default:"No track" }}</span><span class="cover-title">{{ project.title }}</span><span class="cover-band cover-foot">No. {{ project.pk|stringformat:"03d" }}</span></span>
+        {% endif %}
+        <span class="embed-name">{{ project.title }}</span>
+        <span class="embed-team">{{ project.team.name }}{% if project.track %} · {{ project.track.name }}{% endif %}</span>
+        {% for prize in project.won %}<span class="embed-won">&#9733; {{ prize }}</span>{% endfor %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="embed-empty">No projects to show yet.</p>
+  {% endif %}
+  <footer class="embed-foot">
+    <a href="{{ gallery_url }}" rel="noopener">See all {{ total }} in the gallery &rarr;</a>
+    <span class="mono">Shipshape</span>
+  </footer>
+</body>
+</html>

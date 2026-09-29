@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Scores behind record {{ record.code }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{% url 'records:detail' record.code %}">Record {{ record.code }}</a> · {{ event.name }}</p>
+  <h1 class="display">The scores behind the fingerprint</h1>
+  <p class="lede">The public judge's record shows only a SHA-256 of these scores, so nobody learns the marks from it. This list is what it was made from. Only {{ record.user.display_name }} and the organizers can open this page.</p>
+</header>
+<div class="notice {% if receipt.matches %}{% else %}notice-error{% endif %}"><p>
+  {% if receipt.matches %}<strong>It matches.</strong> These scores hash to <span class="mono break">{{ receipt.published_sha256 }}</span>, the value in the signed record.{% else %}<strong>It doesn't match</strong> the signed record. Something changed this page's data; tell the organizers.{% endif %}
+  {% if receipt.changed_since %} The judge's scores have been revised since the record was issued, so today's scores wouldn't hash to it: the record shows what they were when it was issued.{% endif %}
+</p></div>
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Project</th><th>Marks</th><th>Submitted</th></tr></thead>
+    <tbody>
+      {% for row in receipt.scores %}
+      <tr><td><strong>{{ row.title }}</strong> <span class="mono small muted">{{ row.project }}</span></td>
+        <td class="mono small">{% for key, value in row.marks.items %}{{ key }} {{ value }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
+        <td class="mono small">{{ row.submitted_at }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="help">To check the fingerprint yourself: build <span class="mono">{"scores": [...]}</span> from these rows, in this order, as JSON with sorted keys and no spaces, and take its SHA-256.</p>
+{% endblock %}

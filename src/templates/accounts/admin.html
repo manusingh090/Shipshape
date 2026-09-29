@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Platform admin</p>
+  <h1 class="display">People and events</h1>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="stat-num">{{ counts.users }}</div><div class="stat-label">Accounts</div></div>
+  <div class="stat"><div class="stat-num">{{ counts.organizers }}</div><div class="stat-label">Organizers</div></div>
+  <div class="stat"><div class="stat-num">{{ counts.admins }}</div><div class="stat-label">Admins</div></div>
+  <div class="stat"><div class="stat-num">{{ counts.inactive }}</div><div class="stat-label">Deactivated</div></div>
+</div>
+
+<section class="block">
+  <header class="block-head"><h2>Accounts</h2></header>
+  <p class="small">Organizers can create hackathons. Admins can do anything, including this page. Per-event roles (organizer, judge) are set inside each event's console.</p>
+  <form class="filters" method="get" role="search">
+    <div class="filter-field filter-q">
+      <label for="u-q">Name or email</label>
+      <input id="u-q" type="search" name="q" value="{{ q }}">
+    </div>
+    <div class="filter-field">
+      <label for="u-role">Role</label>
+      <select id="u-role" name="role" data-autosubmit>
+        <option value="">Anyone</option>
+        {% for value, label in roles %}<option value="{{ value }}"{% if value == role %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        <option value="inactive"{% if role == 'inactive' %} selected{% endif %}>Deactivated</option>
+      </select>
+    </div>
+    <div class="filter-actions"><button class="btn" type="submit">Find</button>{% if q or role %}<a href="{% url 'accounts:admin' %}">Clear</a>{% endif %}</div>
+  </form>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Person</th><th>Joined</th><th>Platform role and access</th></tr></thead>
+      <tbody>
+        {% for person in page.object_list %}
+        <tr>
+          <td><strong>{{ person.display_name }}</strong>{% if person == user %} <span class="small muted">(you)</span>{% endif %}<br><span class="mono muted">{{ person.email }}{% if person.external_id %} · {{ person.external_id }}{% endif %}</span></td>
+          <td class="small">{% when person.date_joined None "date" %}</td>
+          <td>
+            <form class="inline-form" method="post" action="{% url 'accounts:admin_user_update' person.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <label class="sr-only" for="role-{{ person.pk }}">Role for {{ person.display_name }}</label>
+              <select id="role-{{ person.pk }}" name="platform_role">
+                {% for value, label in roles %}<option value="{{ value }}"{% if value == person.platform_role %} selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+              <label class="check small"><input type="checkbox" name="is_active"{% if person.is_active %} checked{% endif %}> active</label>
+              <button class="btn btn-ghost btn-small" type="submit">Save</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="muted">Nobody matches.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "_pagination.html" %}
+</section>
+
+<section class="block">
+  <header class="block-head"><h2>Platform audit log</h2><span><a href="{% url 'accounts:admin_audit' %}">The whole log</a> · <a href="{% url 'webhooks:admin' %}">Platform webhooks</a></span></header>
+  <p class="small">What belongs to no single event: sign-in lockouts, sign-up limits, and admins changing accounts. Each event's own trail is on its console's Activity tab.</p>
+  {% include "events/manage/_activity_list.html" with items=platform_log event=None %}
+</section>
+
+<section class="block">
+  <header class="block-head"><h2>Every event</h2></header>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Event</th><th>Status</th><th class="num">Teams</th><th class="num">Submitted</th><th></th></tr></thead>
+      <tbody>
+        {% for event in events %}
+        <tr>
+          <td><a href="{{ event.get_absolute_url }}"><strong>{{ event.name }}</strong></a>{% if not event.is_published %} <span class="stamp stamp-draft">Unpublished</span>{% endif %}</td>
+          <td>{% include "events/_phase_stamp.html" %}</td>
+          <td class="num">{{ event.team_count }}</td>
+          <td class="num">{{ event.submitted_count }}</td>
+          <td class="row-actions"><a href="{% url 'events:manage' event.slug %}">Console</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

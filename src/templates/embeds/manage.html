@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Embed · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<p class="lede-small">Put {{ event.name }}'s gallery on another site, such as the hackathon's homepage, a sponsor's blog or the venue screen. It shows what a signed-out visitor sees here and nothing more: no drafts, no scores, no vote counts. Winners appear once awards are public.</p>
+{% if not event.is_published %}<div class="notice notice-warn"><p>The event isn't published, so the widget shows nothing until it is.</p></div>{% endif %}
+
+<div class="split split-wide">
+  <section>
+    <header class="block-head"><h2>Preview</h2><a href="{{ snippets.widget_url }}">Open it on its own</a></header>
+    {% if config.enabled and event.is_published %}
+    <iframe class="embed-preview" src="{{ preview_url }}" title="Preview of the embedded gallery"></iframe>
+    {% else %}
+    <div class="empty"><p>Embedding is switched off.</p></div>
+    {% endif %}
+
+    <header class="block-head block-head-spaced"><h2>Embed code</h2></header>
+    <div class="field">
+      <label for="snippet-script">Script (recommended: it sizes itself to fit)</label>
+      <textarea id="snippet-script" class="snippet" rows="3" readonly>{{ snippets.script }}</textarea>
+      <p class="actions"><button class="btn btn-small" type="button" data-copy="#snippet-script">Copy</button></p>
+    </div>
+    <div class="field">
+      <label for="snippet-iframe">Or a plain iframe (for sites that don't allow scripts)</label>
+      <textarea id="snippet-iframe" class="snippet" rows="3" readonly>{{ snippets.iframe }}</textarea>
+      <p class="actions"><button class="btn btn-ghost btn-small" type="button" data-copy="#snippet-iframe">Copy</button></p>
+    </div>
+    <p class="help">Building your own? The same projects come as JSON at <span class="mono break">{{ snippets.feed_url }}</span>, readable from any site's JavaScript.</p>
+  </section>
+
+  <aside class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">What it shows</h2>
+      <form method="get">
+        <div class="field"><label for="o-track">Track <span class="opt">optional</span></label>
+          <select id="o-track" name="track"><option value="">Every track</option>{% for t in tracks %}<option value="{{ t.pk }}"{% if opts.track == t.pk|stringformat:"d" %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="o-tag">Tech tag <span class="opt">optional</span></label><input id="o-tag" type="text" name="tag" value="{{ opts.tag }}"></div>
+        <div class="field"><label for="o-sort">Order</label>
+          <select id="o-sort" name="sort">{% for key, label in sorts.items %}<option value="{{ key }}"{% if opts.sort == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+          <div class="help">Shuffled is fairest: no project is always first on your page.</div></div>
+        <div class="field"><label for="o-limit">How many</label><input id="o-limit" type="number" name="limit" min="1" max="48" value="{{ opts.limit }}"></div>
+        <div class="field"><label for="o-theme">Look</label>
+          <select id="o-theme" name="theme">{% for key, label in themes.items %}<option value="{{ key }}"{% if opts.theme == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <button class="btn btn-small" type="submit">Update the snippet</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">Who may embed it</h2>
+      <form method="post" novalidate>{% csrf_token %}
+        {% for field in form %}{% include "_field.html" %}{% endfor %}
+        <button class="btn btn-small" type="submit">Save</button>
+      </form>
+      <p class="help">Enforced by the browser (a content security policy on the widget), so another site can't frame it just by copying the snippet.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

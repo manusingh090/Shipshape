@@ -1,0 +1,1 @@
+{% with phase=event.phase %}<span class="stamp stamp-{{ phase }}">{% if phase == 'open' %}Open{% elif phase == 'upcoming' %}Coming up{% else %}Closed{% endif %}</span>{% endwith %}

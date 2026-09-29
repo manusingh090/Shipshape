@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Rubric · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+{% include "judging/_subnav.html" %}
+<div class="split">
+  <section>
+    <header class="block-head"><h2>The rubric</h2><span class="small muted">Marks from {{ config.scale_min }} to {{ config.scale_max }}</span></header>
+    {% if locked %}
+    <div class="notice"><p><strong>Scoring has started.</strong> The scale is fixed and criteria can't be added or removed, so every score stays comparable. Weights, names and descriptions can still change: results recalculate straight away and the change goes in the activity log.</p></div>
+    {% endif %}
+    {% if shares %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Criterion</th><th class="num">Weight</th><th class="w-meter">Share of the score</th><th></th></tr></thead>
+        <tbody>
+          {% for criterion, share in shares %}
+          <tr>
+            <td><strong>{{ criterion.label }}</strong> <span class="mono muted">{{ criterion.key }}</span>{% if criterion.description %}<br><span class="small muted">{{ criterion.description }}</span>{% endif %}</td>
+            <td class="num">{{ criterion.weight|floatformat:"-2" }}</td>
+            <td><progress max="100" value="{{ share }}" aria-label="{{ share }} percent"></progress> <span class="mono small">{{ share }}%</span></td>
+            <td class="row-actions">
+              <a href="?edit={{ criterion.pk }}#editor">Edit</a>
+              {% if not locked %}<form method="post" data-confirm="Remove &ldquo;{{ criterion.label }}&rdquo;?">{% csrf_token %}<input type="hidden" name="op" value="delete"><input type="hidden" name="id" value="{{ criterion.pk }}"><button class="linklike danger" type="submit">Remove</button></form>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="formula">
+      <p class="label">How a judge's marks become one score</p>
+      <p>Each mark is multiplied by its criterion's weight, and the total is divided by the sum of the weights. The result stays on the {{ config.scale_min }} to {{ config.scale_max }} scale, whatever the weights add up to.</p>
+      <p class="mono small">weighted = &Sigma; (weight &times; mark) &divide; &Sigma; weight</p>
+    </div>
+    {% else %}
+    <div class="empty"><p>No criteria yet. Add the first one on the right; judges score each one from {{ config.scale_min }} to {{ config.scale_max }}.</p></div>
+    {% endif %}
+  </section>
+
+  <div class="side-col">
+    <section class="panel{% if editing %} panel-strong{% endif %}" id="editor">
+      <h2 class="panel-title">{% if editing %}Edit &ldquo;{{ editing.label }}&rdquo;{% else %}Add a criterion{% endif %}</h2>
+      {% if locked and not editing %}
+      <p class="muted">Scoring has started, so no new criteria. Edit an existing one to change its weight.</p>
+      {% else %}
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="op" value="save">
+        {% if editing %}<input type="hidden" name="id" value="{{ editing.pk }}">{% endif %}
+        {{ criterion_form.non_field_errors }}
+        {% for field in criterion_form %}{% include "_field.html" %}{% endfor %}
+        <div class="actions"><button class="btn" type="submit">{% if editing %}Save{% else %}Add criterion{% endif %}</button>{% if editing %} <a href="{{ request.path }}">Cancel</a>{% endif %}</div>
+      </form>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Settings</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="op" value="config">
+        {{ config_form.non_field_errors }}
+        <div class="form-grid">
+          {% include "_field.html" with field=config_form.scale_min %}
+          {% include "_field.html" with field=config_form.scale_max %}
+        </div>
+        {% include "_field.html" with field=config_form.reviews_per_project %}
+        {% include "_field.html" with field=config_form.kappa %}
+        <button class="btn btn-small" type="submit">Save settings</button>
+      </form>
+      <p class="help">Kappa is explained, with the evidence for 5, in JUDGING.md. Higher trusts each judge's own spread less.</p>
+    </section>
+  </div>
+</div>
+{% endblock %}

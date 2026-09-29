@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}{{ event.name }}{% endblock %}
+{% block content %}
+{% if not event.is_published %}
+<div class="notice notice-warn"><p><strong>Unpublished.</strong> Only organizers can see this page. Publish it from <a href="{% url 'events:manage_details' event.slug %}">the event details</a> when it's ready.</p></div>
+{% endif %}
+
+<header class="event-head">
+  <div>
+    <p class="eyebrow">Hackathon{% if event.location %} · {{ event.location }}{% endif %} · times in {{ event.timezone }}</p>
+    <h1 class="display">{{ event.name }}</h1>
+    {% if event.tagline %}<p class="lede">{{ event.tagline }}</p>{% endif %}
+    {% if viewer.role_labels %}<p class="you-are">You're here as <strong>{{ viewer.role_labels|join:", "|lower }}</strong>.</p>{% endif %}
+  </div>
+  <aside class="deadline-card is-{{ event.phase }}" aria-label="Deadline">
+    {% include "events/_phase_stamp.html" %}
+    <p class="deadline-label">{% if event.is_closed %}Submissions closed{% else %}Submissions close{% endif %}</p>
+    <p class="deadline-when">{% when event.submissions_close_at event %}</p>
+    {% if event.is_open %}
+      <p class="deadline-count"><strong data-countdown="{{ event.submissions_close_at|iso }}" data-done="closed now">{{ event.submissions_close_at|until }}</strong> to go</p>
+    {% elif event.is_upcoming %}
+      <p class="deadline-count">Kickoff in <strong>{{ event.starts_at|until }}</strong></p>
+    {% else %}
+      <p class="deadline-count">{{ event.submissions_close_at|since }} ago. The form is locked.</p>
+    {% endif %}
+  </aside>
+</header>
+
+{% include "events/_milestones.html" %}
+
+<div class="layout-2">
+  <div>
+    <div class="only-narrow">{% include "events/_your_part.html" %}</div>
+    <section class="block">
+      <header class="block-head"><h2>About</h2></header>
+      <div class="prose">
+        {% if event.description %}{{ event.description|markdown }}{% else %}<p class="muted">The organizers haven't written a description yet.</p>{% endif %}
+      </div>
+    </section>
+
+    <section class="block">
+      <header class="block-head">
+        <h2>Tracks</h2>
+        <a href="{% url 'projects:event_gallery' event.slug %}">Browse {{ counts.submitted }} project{{ counts.submitted|pluralize }}</a>
+      </header>
+      {% if tracks %}
+      <ul class="track-list">
+        {% for track in tracks %}
+        <li class="track-item {{ track|track_class }}">
+          <span class="swatch" aria-hidden="true"></span>
+          <div>
+            <h3><a href="{% url 'projects:event_gallery' event.slug %}?track={{ track.pk }}">{{ track.name }}</a></h3>
+            {% if track.description %}<p>{{ track.description }}</p>{% endif %}
+          </div>
+          <span class="count" title="Submitted projects">{{ track.project_count }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No tracks yet.</p>
+      {% endif %}
+    </section>
+
+    {% if prizes %}
+    <section class="block">
+      <header class="block-head"><h2>Prizes</h2></header>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Prize</th><th>Track</th><th class="num">Winners</th><th>Value</th></tr></thead>
+          <tbody>
+            {% for prize in prizes %}
+            <tr>
+              <td><strong>{{ prize.name }}</strong>{% if prize.description %}<br><span class="small muted">{{ prize.description }}</span>{% endif %}
+                {% for award in prize.public_awards %}<br><span class="winner">&#9733; <a href="{{ award.project.get_absolute_url }}">{{ award.project.title }}</a></span> <span class="small muted">{{ award.project.team.name }}</span>{% endfor %}</td>
+              <td>{% if prize.track %}<span class="track-chip {{ prize.track|track_class }}">{{ prize.track.name }}</span>{% else %}<span class="muted">Overall</span>{% endif %}</td>
+              <td class="num">{{ prize.quantity }}</td>
+              <td>{{ prize.value }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if questions %}
+    <section class="block">
+      <header class="block-head"><h2>Submission form questions</h2></header>
+      <p>Besides the usual fields (name, tagline, description, thumbnail, images, demo video, repository, live link, tech tags and track) the organizers want to know:</p>
+      <ol class="question-preview">
+        {% for q in questions %}<li>{{ q.prompt }}{% if q.required %} <span class="req">required</span>{% endif %}{% if not q.is_public %} <span class="small muted">(only organizers see the answer)</span>{% endif %}</li>{% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="side-col sticky">
+    <div class="only-wide">{% include "events/_your_part.html" %}</div>
+    {% include "voting/_event_panel.html" %}
+    {% if results_state != 'not_ready' %}
+    <section class="panel{% if results_state == 'published' %} panel-strong{% endif %}">
+      <h2 class="panel-title">Results</h2>
+      {% if results_state == 'published' %}
+      <p class="small">The judges' results are out{% if viewer.team %}, with your team's place{% endif %}.</p>
+      {% else %}
+      <p class="small">Judging is under way. The results appear here once the organizers publish them.</p>
+      {% endif %}
+      <p class="actions"><a class="btn{% if results_state != 'published' %} btn-ghost{% endif %} btn-small" href="{% url 'judging:public_results' event.slug %}">{% if results_state == 'published' %}See the results{% else %}The results page{% endif %}</a></p>
+    </section>
+    {% endif %}
+    {% if records %}
+    <section class="panel">
+      <h2 class="panel-title">Signed records</h2>
+      <p class="small">{{ records.count }} record{{ records.count|pluralize }} from this event, {{ records.judges }} of them judges' records, {{ records.count|pluralize:"is,are" }} signed with Ed25519 key <span class="mono">{{ records.key_id }}</span>. Anyone can check one, here or offline.</p>
+      <p class="small"><a href="{% url 'records:verify' %}">Check a record</a> · <a href="{% url 'records_key' %}">The public key</a></p>
+    </section>
+    {% endif %}
+    <section class="panel">
+      <h2 class="panel-title">By the numbers</h2>
+      <dl class="facts">
+        <div><dt>Teams</dt><dd>{{ counts.teams }}</dd></div>
+        <div><dt>People on teams</dt><dd>{{ counts.participants }}</dd></div>
+        <div><dt>Projects submitted</dt><dd>{{ counts.submitted }}</dd></div>
+        <div><dt>Judges</dt><dd>{{ counts.judges }}</dd></div>
+        <div><dt>Team size limit</dt><dd>{{ event.max_team_size }}</dd></div>
+      </dl>
+    </section>
+    {% if organizers %}
+    <section class="panel">
+      <h2 class="panel-title">Organized by</h2>
+      <ul class="plain people">{% for person in organizers %}<li><span class="avatar" aria-hidden="true">{{ person.initials }}</span>{{ person.display_name }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

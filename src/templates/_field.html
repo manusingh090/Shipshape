@@ -1,0 +1,19 @@
+{% load ui %}{% with kind=field|field_type %}
+<div class="field field-{{ kind }}{% if field.errors %} has-error{% endif %}">
+  {% if kind == "checkboxinput" %}
+    <label class="check">{{ field }} <span>{{ field.label }}</span></label>
+  {% else %}
+    {# Required fields are the norm, so only the exceptions get a marker. #}
+    <label for="{{ field.id_for_label }}">{{ field.label }}
+      {% if question %}
+        {% if question.required %}<span class="req">needed to submit</span>{% else %}<span class="opt">optional</span>{% endif %}
+        {% if not question.is_public %}<span class="opt">· only organizers see this</span>{% endif %}
+      {% elif field.field.needed_to_submit %}<span class="req">needed to submit</span>
+      {% elif not field.field.required %}<span class="opt">optional</span>{% endif %}
+    </label>
+    {{ field }}
+  {% endif %}
+  {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+  {% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}
+</div>
+{% endwith %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Prizes · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<div class="split">
+  <section>
+    <header class="block-head"><h2>Prizes</h2></header>
+    {% if items %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th class="num">#</th><th>Prize</th><th>Track</th><th class="num">Winners</th><th>Value</th><th></th></tr></thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="num">{{ item.position }}</td>
+            <td><strong>{{ item.name }}</strong>{% if item.description %}<br><span class="small muted">{{ item.description }}</span>{% endif %}</td>
+            <td>{% if item.track %}<span class="track-chip {{ item.track|track_class }}">{{ item.track.name }}</span>{% else %}<span class="muted">Overall</span>{% endif %}</td>
+            <td class="num">{{ item.quantity }}</td>
+            <td>{{ item.value }}</td>
+            <td class="row-actions"><a href="?edit={{ item.pk }}#editor">Edit</a>{% include "events/manage/_delete_button.html" with noun="prize" %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><p>No prizes yet. Prizes can be overall or tied to one track.</p></div>
+    {% endif %}
+  </section>
+  <div>{% include "events/manage/_crud_form.html" with noun="prize" %}</div>
+</div>
+{% endblock %}

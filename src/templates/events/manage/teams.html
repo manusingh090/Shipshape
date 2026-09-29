@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Teams · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<p class="small">{{ teams|length }} team{{ teams|length|pluralize }}. Teams can have up to {{ event.max_team_size }} people. Team names don't have to be unique, so each team also has a number.</p>
+{% if teams %}
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th class="num">#</th><th>Team</th><th>Members</th><th>Project</th></tr></thead>
+    <tbody>
+      {% for team in teams %}
+      <tr>
+        <td class="num">{{ team.pk }}</td>
+        <td><strong>{{ team.name }}</strong>{% if team.external_id %}<br><span class="mono muted">{{ team.external_id }}</span>{% endif %}</td>
+        <td class="small">
+          {% for m in team.memberships.all %}
+            {{ m.user.display_name }} <span class="muted">&lt;{{ m.user.email }}&gt;</span>{% if m.role == 'captain' %} <span class="req">captain</span>{% endif %}{% if not forloop.last %}<br>{% endif %}
+          {% endfor %}
+        </td>
+        <td>
+          {% for p in team.projects.all %}
+            <a href="{{ p.get_absolute_url }}">{{ p.title }}</a> <span class="stamp {% if p.duplicate_of_id %}stamp-duplicate{% else %}stamp-{{ p.status }}{% endif %}">{% if p.duplicate_of_id %}Duplicate{% else %}{{ p.get_status_display }}{% endif %}</span>{% if not forloop.last %}<br>{% endif %}
+          {% empty %}
+            <span class="muted">none yet</span>
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty"><p>No teams yet.</p></div>
+{% endif %}
+{% endblock %}

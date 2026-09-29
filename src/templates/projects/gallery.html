@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}{% if event %}Projects · {{ event.name }}{% else %}Gallery{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">{% if event %}<a href="{{ event.get_absolute_url }}">{{ event.name }}</a> · gallery{% else %}Every hackathon · gallery{% endif %}</p>
+  <h1 class="display">{% if scoped %}What got built{% elif event %}{{ event.name }}{% else %}The gallery{% endif %}</h1>
+  <p class="lede">Every project here was handed in before its deadline. Drafts stay private until their team submits.</p>
+</header>
+
+<form class="filters" method="get" role="search" action="{{ request.path }}">
+  <div class="filter-field filter-q">
+    <label for="f-q">Search</label>
+    <input id="f-q" type="search" name="q" value="{{ q }}" placeholder="Project, team, tag or track" maxlength="100">
+  </div>
+  {% if not scoped %}
+  <div class="filter-field">
+    <label for="f-event">Hackathon</label>
+    <select id="f-event" name="event" data-autosubmit>
+      <option value="">All</option>
+      {% for e in event_options %}<option value="{{ e.slug }}"{% if e.slug == event_slug %} selected{% endif %}>{{ e.name }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if tracks %}
+  <div class="filter-field">
+    <label for="f-track">Track</label>
+    <select id="f-track" name="track" data-autosubmit>
+      <option value="">All tracks</option>
+      {% for t in tracks %}<option value="{{ t.pk }}"{% if t.pk|stringformat:"s" == track_id %} selected{% endif %}>{{ t.name }} ({{ t.n }})</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if tags %}
+  <div class="filter-field">
+    <label for="f-tag">Built with</label>
+    <select id="f-tag" name="tag" data-autosubmit>
+      <option value="">Anything</option>
+      {% for t in tags %}<option value="{{ t.name }}"{% if t.name == tag %} selected{% endif %}>{{ t.name }} ({{ t.n }})</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="filter-field">
+    <label for="f-sort">Order</label>
+    <select id="f-sort" name="sort" data-autosubmit>
+      {% for key, label in sorts %}<option value="{{ key }}"{% if key == sort %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  {% if sort == "shuffle" and seed %}<input type="hidden" name="seed" value="{{ seed }}">{% endif %}
+  <div class="filter-actions">
+    <button class="btn" type="submit">Search</button>
+    {% if filtered %}<a href="{{ request.path }}">Clear</a>{% endif %}
+  </div>
+</form>
+
+<div class="results-line">
+  <span>{{ page.paginator.count }} project{{ page.paginator.count|pluralize }}{% if filtered %} match{{ page.paginator.count|pluralize:"es," }}{% endif %}</span>
+  {% if filtered %}
+  <span class="chips">
+    {% if q %}<a class="chip" href="{% query q='' %}" title="Remove">&ldquo;{{ q }}&rdquo; &times;</a>{% endif %}
+    {% if event_slug %}<a class="chip" href="{% query event='' track='' %}" title="Remove">{{ event.name }} &times;</a>{% endif %}
+    {% if track_id %}{% for t in tracks %}{% if t.pk|stringformat:"s" == track_id %}<a class="chip" href="{% query track='' %}" title="Remove">{{ t.name }} &times;</a>{% endif %}{% endfor %}{% endif %}
+    {% if tag %}<a class="chip" href="{% query tag='' %}" title="Remove">{{ tag }} &times;</a>{% endif %}
+  </span>
+  {% endif %}
+</div>
+
+{% if page.object_list %}
+<div class="cards">
+  {% for project in page.object_list %}{% include "projects/_card.html" %}{% endfor %}
+</div>
+{% include "_pagination.html" %}
+{% else %}
+<div class="empty"><p>Nothing matches that. Try fewer words, or <a href="{{ request.path }}">clear the filters</a>.</p></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,7 @@
+{% if report.counts %}
+<dl class="facts">{% for key, n in report.counts.items %}<div><dt>{{ key|capfirst }}</dt><dd>{{ n }}</dd></div>{% endfor %}</dl>
+{% include "transfer/_notes.html" with notes=report.warnings %}
+{% else %}
+<dl class="facts"><div><dt>Would be added</dt><dd>{{ report.added }}</dd></div><div><dt>Skipped</dt><dd>{{ report.skipped }}</dd></div><div><dt>New accounts</dt><dd>{{ report.new_accounts }}</dd></div></dl>
+{% include "transfer/_notes.html" with notes=report.problems %}
+{% endif %}

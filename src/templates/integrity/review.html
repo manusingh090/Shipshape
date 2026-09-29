@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Integrity · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+
+<p class="lede-small">What the portal refused, what looks suspicious, and what you've decided about it. Nothing here punishes anyone on its own: the checks flag, you judge, and every decision goes in the <a href="{% url 'events:manage_activity' event.slug %}?only=integrity">audit log</a> with your reason.</p>
+
+<div class="stats">
+  <div class="stat{% if refusal_count %} stat-alert{% endif %}"><div class="stat-num">{{ refusal_count }}</div><div class="stat-label">Rate-limit refusals, last 24 h</div></div>
+  <div class="stat{% if strong %} stat-alert{% endif %}"><div class="stat-num">{{ strong|length }}</div><div class="stat-label">Ballots with 2+ warning signs</div></div>
+  <div class="stat"><div class="stat-num">{{ flags|length }}</div><div class="stat-label">Ballots flagged at all</div></div>
+  <div class="stat"><div class="stat-num">{{ excluded|length }}</div><div class="stat-label">Ballots left out</div></div>
+  <div class="stat{% if duplicates %} stat-alert{% endif %}"><div class="stat-num">{{ duplicates|length }}</div><div class="stat-label">Possible duplicate projects</div></div>
+  <div class="stat{% if repeated %} stat-alert{% endif %}"><div class="stat-num">{{ repeated|length }}</div><div class="stat-label">Repeated comments</div></div>
+  <div class="stat{% if disagreements %} stat-alert{% endif %}"><div class="stat-num">{{ disagreements|length }}</div><div class="stat-label">Projects where a judge stands apart</div></div>
+</div>
+
+<section class="block">
+  <header class="block-head"><h2>Suspicious ballots</h2><a href="{% url 'judging:export' event.slug 'ballots' %}">Every ballot, as CSV</a></header>
+  {% if flags %}
+  <p class="small">Ranked by how many warning signs each ballot shows. One sign on its own is often innocent: a hundred people on the venue wifi share a network, and friends often vote alike. Leaving a ballot out keeps it on record; the voter isn't told, and you can put it back.</p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="op" value="exclude">
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th><span class="sr-only">Pick</span></th><th>Ballot</th><th>Votes</th><th>Why it's flagged</th></tr></thead>
+        <tbody>
+          {% for flag in flags|slice:":150" %}{% with b=flag.ballot %}
+          <tr{% if flag.strength >= 2 %} class="row-alert"{% endif %}>
+            <td><label class="sr-only" for="b{{ b.pk }}">Pick ballot {{ b.pk }}</label><input id="b{{ b.pk }}" type="checkbox" name="ballot" value="{{ b.pk }}"></td>
+            <td><strong>#{{ b.pk }}</strong> <span class="small muted">{{ b.get_kind_display|lower }}</span><br><span class="small">{{ flag.voter }}</span><br><span class="mono small muted">{% when b.created_at event %} · net {{ b.ip_hash|slice:":10"|default:"unknown" }}</span></td>
+            <td class="small">{% for e in b.entries.all %}{{ e.votes }} on {{ e.project.title }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">none</span>{% endfor %}</td>
+            <td><ul class="reasons">{% for reason in flag.reasons %}<li>{{ reason }}</li>{% endfor %}</ul></td>
+          </tr>
+          {% endwith %}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="inline-form review-action">
+      <label class="sr-only" for="exclude-reason">Reason</label>
+      <input id="exclude-reason" type="text" name="reason" maxlength="200" required placeholder="Why, for the audit log: e.g. 12 ballots from one laptop in 3 minutes">
+      <button class="btn btn-danger btn-small" type="submit">Leave the picked ballots out</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="empty"><p>No ballot shows a warning sign.</p></div>
+  {% endif %}
+
+  {% if excluded %}
+  <h3 class="sub-head">Left out of the count</h3>
+  <ul class="plain decided">
+    {% for b in excluded %}
+    <li><strong>#{{ b.pk }}</strong> {{ b.email|default:b.user.email|default:"open-link ballot" }}: {{ b.excluded_reason }} <span class="small muted">({{ b.excluded_by.display_name|default:"an organizer" }}, {% when b.excluded_at event %})</span>
+      <form method="post" class="inline">{% csrf_token %}<input type="hidden" name="op" value="restore"><input type="hidden" name="ballot" value="{{ b.pk }}"><button class="linklike" type="submit">Count it again</button></form></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="block">
+  <header class="block-head"><h2>Possible duplicate projects</h2><a href="{% url 'events:manage_submissions' event.slug %}">Submissions</a></header>
+  {% for group in duplicates %}
+  <div class="panel dup-group">
+    <p class="panel-title">Handed in with {{ group.why }}</p>
+    <ul class="plain">
+      {% for p in group.projects %}<li><a href="{{ p.get_absolute_url }}"><strong>{{ p.title }}</strong></a> (#{{ p.pk }}) by {{ p.team.name }} <span class="small muted">· submitted {% when p.submitted_at event %}{% if p.repo_url %} · {{ p.repo_url }}{% endif %}{% if p.duplicate_of_id %} · already hidden as a duplicate{% endif %}</span></li>{% endfor %}
+    </ul>
+    <form method="post" class="dup-form">
+      {% csrf_token %}<input type="hidden" name="op" value="hide_duplicate">
+      <label>Hide <select name="project">{% for p in group.projects %}{% if not p.duplicate_of_id %}<option value="{{ p.pk }}"{% if forloop.last %} selected{% endif %}>#{{ p.pk }} {{ p.title }}</option>{% endif %}{% endfor %}</select></label>
+      <label>as a duplicate of <select name="original">{% for p in group.projects %}{% if not p.duplicate_of_id %}<option value="{{ p.pk }}">#{{ p.pk }} {{ p.title }}</option>{% endif %}{% endfor %}</select></label>
+      <input type="text" name="reason" maxlength="200" required placeholder="Why, e.g. same repo, resubmitted by another team">
+      <button class="btn btn-small" type="submit">Hide it</button>
+    </form>
+  </div>
+  {% empty %}
+  <div class="empty"><p>No two listed projects share a repository or a title.</p></div>
+  {% endfor %}
+</section>
+
+<section class="block">
+  <header class="block-head"><h2>Judges who disagree with the panel</h2><a href="{% url 'judging:results' event.slug %}">Results</a></header>
+  <p class="small">After normalization, each judge's score for a project is compared with the average of the others who reviewed it. A gap of 1.5 or more is what a judge boosting a friend or sinking a rival looks like, and also what honest disagreement looks like: in simulated events with nobody cheating, about 2 projects in 40 show up here anyway. Read the scores' comments, ask the judges, or add a review with a top-up batch. Nothing here changes the results.</p>
+  {% for group in disagreements %}
+  <div class="panel dup-group">
+    <p class="panel-title"><a href="{{ group.project.get_absolute_url }}">{{ group.project.title }}</a> <span class="small muted">by {{ group.project.team.name }}</span></p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Judge</th><th class="num">Weighted mark</th><th class="num">Normalized</th><th class="num">Gap from the rest</th></tr></thead>
+        <tbody>
+          {% for j in group.judges %}<tr{% if j.flagged %} class="row-alert"{% endif %}><td>{{ j.judge.display_name }}</td><td class="num mono">{{ j.mark|floatformat:2 }}</td><td class="num mono">{{ j.z|floatformat:2 }}</td><td class="num mono">{% if j.gap > 0 %}+{% endif %}{{ j.gap|floatformat:2 }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% empty %}
+  <div class="empty"><p>No judge's score is 1.5 or more from the rest of their panel{% if not event.phase == "closed" %} (judging hasn't started){% endif %}.</p></div>
+  {% endfor %}
+</section>
+
+<section class="block">
+  <header class="block-head"><h2>Repeated comments</h2><a href="{% url 'judging:export' event.slug 'comments' %}">Every comment, as CSV</a></header>
+  {% for group in repeated %}
+  <form method="post" class="panel dup-group">
+    {% csrf_token %}<input type="hidden" name="op" value="remove_comments">
+    <p class="panel-title">The same text on {{ group.comments|length }} projects</p>
+    <blockquote class="quoted">{{ group.text|truncatechars:300 }}</blockquote>
+    <ul class="plain">
+      {% for c in group.comments %}<li><label class="check"><input type="checkbox" name="comment" value="{{ c.pk }}" checked> <span>{{ c.author.display_name }} on <a href="{{ c.project.get_absolute_url }}#comment-{{ c.pk }}">{{ c.project.title }}</a>, {% when c.created_at event %}</span></label></li>{% endfor %}
+    </ul>
+    <div class="inline-form review-action">
+      <input type="text" name="reason" maxlength="200" required value="spam: the same comment posted on many projects" aria-label="Reason">
+      <button class="btn btn-danger btn-small" type="submit">Remove the ticked comments</button>
+    </div>
+  </form>
+  {% empty %}
+  <div class="empty"><p>No comment text appears on three or more projects.</p></div>
+  {% endfor %}
+</section>
+
+<section class="block">
+  <header class="block-head"><h2>Rate limits</h2><a href="{% url 'events:manage_activity' event.slug %}?only=refused">Every refusal</a></header>
+  <p class="small">Set to stop scripts, not crowds. When a limit refuses someone, one line goes in the audit log for that burst, so a script hammering the site can't bury everything else.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>What's limited</th><th class="num">Limit</th><th>Why</th></tr></thead>
+      <tbody>
+        {% for l in limits %}<tr><td>{{ l.what|capfirst }}</td><td class="num nowrap">{{ l.limit }} per {{ l.window_label }}</td><td class="small">{{ l.why }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if refusals %}
+  <h3 class="sub-head">Refused in the last 24 hours</h3>
+  {% include "events/manage/_activity_list.html" with items=refusals %}
+  {% endif %}
+</section>
+{% endblock %}

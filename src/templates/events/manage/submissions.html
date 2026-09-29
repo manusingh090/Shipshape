@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Submissions · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<nav class="filter-links" aria-label="Filter by status">
+  <a href="?" {% if not status %}aria-current="page"{% endif %}>Everything</a>
+  <a href="?status=submitted" {% if status == 'submitted' %}aria-current="page"{% endif %}>Submitted</a>
+  <a href="?status=draft" {% if status == 'draft' %}aria-current="page"{% endif %}>Drafts</a>
+  <a href="?status=duplicate" {% if status == 'duplicate' %}aria-current="page"{% endif %}>Flagged duplicates</a>
+</nav>
+{% if projects %}
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th class="num">#</th><th>Project</th><th>Team</th><th>Track</th><th>Status</th><th>Submitted</th><th>Last change</th></tr></thead>
+    <tbody>
+      {% for p in projects %}
+      <tr>
+        <td class="num">{{ p.pk }}</td>
+        <td><a href="{{ p.get_absolute_url }}"><strong>{{ p.title }}</strong></a>{% if p.external_id %}<br><span class="mono muted">{{ p.external_id }}</span>{% endif %}</td>
+        <td>{{ p.team.name }}</td>
+        <td>{% if p.track %}<span class="track-chip {{ p.track|track_class }}">{{ p.track.name }}</span>{% else %}<span class="muted">none</span>{% endif %}</td>
+        <td>
+          {% if p.duplicate_of %}
+            <span class="stamp stamp-duplicate">Duplicate</span><br>
+            <span class="small">of <a href="{{ p.duplicate_of.get_absolute_url }}">#{{ p.duplicate_of.pk }}</a> ·
+            <form class="inline" method="post" action="{% url 'events:promote_duplicate' event.slug p.pk %}" data-confirm="List #{{ p.pk }} and hide #{{ p.duplicate_of.pk }}?">{% csrf_token %}<button class="linklike" type="submit">list this one</button></form></span>
+          {% else %}
+            <span class="stamp stamp-{{ p.status }}">{{ p.get_status_display }}</span>
+          {% endif %}
+        </td>
+        <td class="small">{% if p.submitted_at %}{% when p.submitted_at event %}{% else %}<span class="muted">not yet</span>{% endif %}</td>
+        <td class="small">{% when p.updated_at event %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty"><p>Nothing here.</p></div>
+{% endif %}
+{% endblock %}

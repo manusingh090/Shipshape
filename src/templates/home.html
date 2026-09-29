@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Hackathons{% endblock %}
+{% block content %}
+<section class="intro">
+  <div>
+    <p class="eyebrow">A hackathon portal</p>
+    <h1 class="display">Build it over the weekend.<br><em>Hand it in here.</em></h1>
+    <p class="lede">Find a hackathon, form a team, hand in your project before the deadline and follow it through judging to the results. It all happens in one place, and {{ SITE_NAME }} runs on a single machine without the internet.</p>
+  </div>
+  <dl class="tally">
+    <div><dt>Hackathons</dt><dd>{{ totals.events }}</dd></div>
+    <div><dt>Teams</dt><dd>{{ totals.teams }}</dd></div>
+    <div><dt>Projects handed in</dt><dd>{{ totals.projects }}</dd></div>
+  </dl>
+</section>
+
+{% if running %}
+<section class="block">
+  <header class="block-head"><h2>Open for submissions</h2></header>
+  <p class="block-intro">Running now. Start or join a team, then hand in your project before the deadline on the left.</p>
+  {% for event in running %}{% include "events/_event_row.html" %}{% endfor %}
+</section>
+{% endif %}
+
+{% if upcoming %}
+<section class="block">
+  <header class="block-head"><h2>Coming up</h2></header>
+  <p class="block-intro">Announced, not started yet. Teams can form now, and projects can be handed in from kickoff.</p>
+  {% for event in upcoming %}{% include "events/_event_row.html" %}{% endfor %}
+</section>
+{% endif %}
+
+{% if finished %}
+<section class="block">
+  <header class="block-head"><h2>Past hackathons</h2></header>
+  <p class="block-intro">Submissions are closed. Browse what was handed in, and see the results once the organizers publish them.</p>
+  {% for event in finished %}{% include "events/_event_row.html" %}{% endfor %}
+</section>
+{% endif %}
+
+{% if recent %}
+<section class="block">
+  <header class="block-head"><h2>Latest submissions</h2><a href="{% url 'projects:gallery' %}">Browse the whole gallery</a></header>
+  <p class="block-intro">The newest projects from every hackathon here. Open one to see its demo, code and team.</p>
+  <div class="cards">{% for project in recent %}{% include "projects/_card.html" with show_event=True %}{% endfor %}</div>
+</section>
+{% endif %}
+
+{% if not running and not upcoming and not finished %}
+<div class="empty">
+  <p>No hackathons here yet.{% if nav.can_organize %} <a href="{% url 'events:create' %}">Set one up</a>.{% endif %}</p>
+</div>
+{% endif %}
+{% endblock %}

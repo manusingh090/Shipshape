@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Judges · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+{% include "judging/_subnav.html" %}
+<div class="split">
+  <div>
+    {% if editing %}
+    <section class="panel panel-strong" id="editor">
+      <h2 class="panel-title">Tracks for {{ editing.user.display_name }}</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="op" value="tracks">
+        <input type="hidden" name="id" value="{{ editing.pk }}">
+        {% for field in tracks_form %}{% include "_field.html" %}{% endfor %}
+        <p class="help">Taking a track away also takes any unfinished reviews in it off their queue. Scores they already submitted stay.</p>
+        <div class="actions"><button class="btn" type="submit">Save tracks</button> <a href="{{ request.path }}">Cancel</a></div>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="block">
+      <header class="block-head"><h2>Judges</h2><span class="small muted">{{ rows|length }}</span></header>
+      <p class="small">A judge only ever sees the projects assigned to them, and only in their own tracks. They never see another judge's marks.</p>
+      {% if rows %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Judge</th><th>Tracks</th><th class="num">Done</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for role, row in rows %}
+            <tr>
+              <td><strong>{{ role.user.display_name }}</strong><br><span class="mono muted">{{ role.user.email }}{% if role.user.external_id %} · {{ role.user.external_id }}{% endif %}</span></td>
+              <td class="small">{% if role.all_tracks %}<span class="stamp stamp-draft">Floater</span> every track{% else %}{% for track in role.tracks.all %}<span class="track-chip {{ track|track_class }}">{{ track.name }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="req">no tracks: can't be assigned</span>{% endfor %}{% endif %}</td>
+              <td class="num">{{ row.submitted }}/{{ row.assigned }}</td>
+              <td><span class="stamp stamp-j-{{ row.status }}">{{ row.status_label }}</span></td>
+              <td class="row-actions">
+                <a href="?edit={{ role.pk }}#editor">Tracks</a>
+                <form method="post" data-confirm="Stop {{ role.user.display_name }} judging? Unfinished reviews come off their queue; submitted scores stay and still count.">{% csrf_token %}<input type="hidden" name="op" value="remove"><input type="hidden" name="id" value="{{ role.pk }}"><button class="linklike danger" type="submit">Remove</button></form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty"><p>No judges yet. Add someone with an account, or make an invite link.</p></div>
+      {% endif %}
+    </section>
+
+    <section class="block" id="invites">
+      <header class="block-head"><h2>Invite links</h2></header>
+      <p class="small">There's no email on an offline laptop, so copy the link and send it yourself. Each link works once.</p>
+      {% if invites %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>For</th><th>Tracks</th><th>State</th><th>Link</th></tr></thead>
+          <tbody>
+            {% for invite, url in invites %}
+            <tr{% if highlight == invite.pk|stringformat:"s" %} class="row-new"{% endif %}>
+              <td>{{ invite.email|default:"anyone with the link" }}<br><span class="small muted">made {% when invite.created_at event "short" %}</span></td>
+              <td class="small">{% if invite.all_tracks %}every track{% else %}{% for track in invite.tracks.all %}{{ track.name }}{% if not forloop.last %}, {% endif %}{% empty %}none{% endfor %}{% endif %}</td>
+              <td><span class="stamp stamp-invite-{{ invite.state }}">{{ invite.state }}</span>{% if invite.state == 'open' %}<br><span class="small muted">until {% when invite.expires_at event "short" %}</span>{% elif invite.accepted_by %}<br><span class="small">{{ invite.accepted_by.display_name }}</span>{% endif %}</td>
+              <td>
+                {% if invite.state == 'open' %}
+                <div class="invite">
+                  <label class="sr-only" for="invite-{{ invite.pk }}">Invite link</label>
+                  <input id="invite-{{ invite.pk }}" type="text" value="{{ url }}" readonly>
+                  <button class="btn btn-small" type="button" data-copy="#invite-{{ invite.pk }}">Copy</button>
+                </div>
+                <form method="post">{% csrf_token %}<input type="hidden" name="op" value="revoke"><input type="hidden" name="id" value="{{ invite.pk }}"><button class="linklike danger small" type="submit">Withdraw</button></form>
+                {% else %}<span class="muted small">no longer usable</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">No invite links yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="block">
+      <header class="block-head"><h2>Conflicts of interest</h2></header>
+      <p class="small">A recorded conflict means the assignment engine will never give that judge that project. Judges can declare one themselves from their scoring page.</p>
+      {% if conflicts %}
+      <ul class="plain">
+        {% for c in conflicts %}<li><strong>{{ c.judge.display_name }}</strong> and <a href="{{ c.project.get_absolute_url }}">{{ c.project.title }}</a>: {{ c.reason }} <span class="small muted">({% if c.declared_by == c.judge %}declared by the judge{% else %}recorded by {{ c.declared_by.display_name|default:"an organizer" }}{% endif %})</span></li>{% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">None recorded.</p>
+      {% endif %}
+      <details class="reveal">
+        <summary>Record a conflict</summary>
+        <form method="post" novalidate class="stack">
+          {% csrf_token %}
+          <input type="hidden" name="op" value="conflict">
+          {% for field in conflict_form %}{% include "_field.html" %}{% endfor %}
+          <button class="btn btn-ghost btn-small" type="submit">Record it</button>
+        </form>
+      </details>
+    </section>
+  </div>
+
+  <div class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Add someone with an account</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="op" value="add">
+        {{ add_form.non_field_errors }}
+        {% for field in add_form %}{% include "_field.html" %}{% endfor %}
+        <button class="btn" type="submit">Add judge</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">Make an invite link</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="op" value="invite">
+        {{ invite_form.non_field_errors }}
+        {% for field in invite_form %}{% include "_field.html" %}{% endfor %}
+        <button class="btn btn-ghost" type="submit">Make link</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

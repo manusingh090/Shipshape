@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ payload.title }} · {{ payload.recipient }}{% endblock %}
+{% block content %}
+<div class="record-status no-print {% if status.valid %}is-valid{% else %}is-invalid{% endif %}" role="status">
+  {% if status.valid %}
+  <p><strong>Genuine.</strong> Signed by this portal's key and never revoked. The signature below checks out against the record's contents.</p>
+  {% elif status.revoked %}
+  <p><strong>Revoked {{ record.revoked_at|date:"j M Y" }}.</strong> The organizers withdrew this record: {{ status.revoked_reason }}</p>
+  {% else %}
+  <p><strong>Doesn't verify.</strong> {{ status.problems|join:" " }}</p>
+  {% endif %}
+</div>
+
+<article class="certificate{% if status.revoked %} is-revoked{% endif %}" aria-label="{{ payload.title }}">
+  <p class="cert-issuer">Shipshape · {{ payload.event.name }}</p>
+  <h1 class="cert-title">{{ payload.title }}</h1>
+  <p class="cert-lead">This is to certify that</p>
+  <p class="cert-name">{{ payload.recipient }}</p>
+  <p class="cert-statement">{{ statement_tail }}</p>
+  {% if payload.kind == "judge" %}<p class="cert-fine mono">Scores fingerprint (SHA-256): {{ payload.details.scores_sha256 }}</p>
+  {% elif payload.details.note %}<p class="cert-note">{{ payload.details.note }}</p>{% endif %}
+  <p class="cert-when">{{ payload.event.dates }}{% if payload.event.location %} · {{ payload.event.location }}{% endif %}</p>
+  <footer class="cert-foot">
+    <span class="mono">Record {{ payload.code }}<br>Issued {{ payload.issued_at }} · key {{ record.key_id }}</span>
+    <span class="mono">Check it at<br>{{ verify_url }}</span>
+  </footer>
+</article>
+
+<div class="layout-2 no-print record-below">
+  <section>
+    <header class="block-head"><h2>Checking it yourself</h2></header>
+    <p>This record is signed with Ed25519. The signature covers the record's JSON exactly (keys sorted, no spaces, UTF-8), so changing a single letter breaks it. You can check it without this portal: download the signed file and run <span class="mono">python src/records/verify.py record.json</span> from the Shipshape source, or any Ed25519 library.</p>
+    <p class="small">Compare the key with the one the organizers published. This portal's public key is <span class="mono break">{{ public_key }}</span>.</p>
+    <details class="reveal"><summary class="small">The signed record</summary><pre class="api-body">{{ record.payload }}</pre><p class="small mono break">signature {{ record.signature }}</p></details>
+  </section>
+  <aside class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">This record</h2>
+      <p class="actions"><a class="btn btn-small" href="{% url 'records:pdf' record.code %}">PDF</a> <a class="btn btn-ghost btn-small" href="{% url 'records:json' record.code %}">Signed JSON</a></p>
+      <p class="small">Print this page for the same certificate without the PDF.</p>
+      {% if can_see_private and record.kind == "judge" %}<p class="small"><a href="{% url 'records:scores' record.code %}">The scores behind the fingerprint</a> (only you and the organizers can open it).</p>{% endif %}
+      <p class="small"><a href="{{ event.get_absolute_url }}">{{ event.name }}</a> · <a href="{% url 'records:verify' %}">Check another record</a></p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

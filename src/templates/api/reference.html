@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}REST API reference{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">For scripts and integrations · v1</p>
+  <h1 class="display">The REST API</h1>
+  <p class="lede">Everything you can do on these pages, you can do from a script: {{ count }} endpoints under <span class="mono">{{ base }}</span>. They call the same code as the pages, so the same rules hold, with the same messages when they say no.</p>
+</header>
+
+<div class="layout-2">
+  <div>
+    {% for name, items in groups %}
+    <section class="block">
+      <header class="block-head"><h2>{{ name }}</h2><span class="small muted">{{ items|length }}</span></header>
+      <ul class="api-list">
+        {% for e in items %}
+        <li>
+          <p class="api-line"><span class="method method-{{ e.method|lower }}">{{ e.method }}</span> <code>{{ e.display_path }}</code></p>
+          <p class="api-summary">{{ e.summary }}</p>
+          <p class="api-meta small muted"><span>Who: {{ e.who }}</span>{% if e.ui %} · <span>Same as: {{ e.ui }}</span>{% endif %}{% if e.shape %} · <span>Returns: <span class="mono">{{ e.shape }}</span></span>{% endif %}</p>
+          {% if e.body %}<pre class="api-body">{{ e.body }}</pre>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+  </div>
+
+  <aside class="side-col sticky">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">OpenAPI</h2>
+      <p>The whole API as an <a href="{{ base }}openapi.json">OpenAPI 3.1 document</a>: every operation with its parameters, request body, answer and errors, the webhook deliveries, and the older <span class="mono">/api/</span> routes.</p>
+      <p class="small">Load it into any OpenAPI tool (a client generator, Postman, Insomnia, a mock server); none of them needs the internet to read it. It's built from the same table as this page, and the tests check every answer the API gives against it.</p>
+      <pre class="api-body">curl -o openapi.json {{ base }}openapi.json</pre>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">Signing in</h2>
+      <p>Make a token on <a href="{% url 'accounts:account' %}#tokens">your account page</a>, then send it with every request:</p>
+      <pre class="api-body">curl -H "Authorization: Bearer ss_..." {{ base }}me</pre>
+      <p class="small">From a signed-in browser on this site, JSON requests also work with the session cookie. Uploads need a token.</p>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">Answers</h2>
+      <p class="small">JSON everywhere. Lists come as <span class="mono">{"count", "page", "pages", "results"}</span>; <span class="mono">?page=</span> and <span class="mono">?per_page=</span> (up to 200) page through them.</p>
+      <p class="small">A refusal is <span class="mono">{"error": "code", "detail": "a sentence for a person"}</span> with the right status: 400 invalid (with <span class="mono">fields</span>), 401 not signed in, 403 not allowed or outside a window, 404 not there or not yours to see, 429 slow down.</p>
+      <p class="small">Dates are UTC ISO 8601. Where the page asks for a time in the event's zone, send either that (<span class="mono">2026-03-01T18:00</span>) or ISO with an offset.</p>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">Webhooks</h2>
+      <p class="small">Everything that goes into an event's activity log can be sent to your own URL as it happens, signed. Organizers set them up in the console; the endpoints are under Webhooks.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Your queue · {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{% url 'judging:home' %}">Judging</a> · {{ event.name }}</p>
+  <h1 class="display">Your queue</h1>
+  <p class="lede">You judge {{ tracks }}. {{ done }} of {{ rows|length }} submitted. Marks run from {{ config.scale_min }} to {{ config.scale_max }}.</p>
+  <progress class="meter-big" max="{{ rows|length|default:1 }}" value="{{ done }}" aria-label="{{ done }} of {{ rows|length }} submitted"></progress>
+</header>
+{% if my_record %}<div class="notice"><p>Your signed judge's record for {{ event.name }} is ready: <a href="{% url 'records:detail' my_record.code %}">{{ my_record.code }}</a>. Anyone can check it; only you and the organizers can see <a href="{% url 'records:scores' my_record.code %}">the scores behind it</a>.</p></div>{% endif %}
+
+{% if phase == 'not_open' %}
+<div class="notice"><p><strong>Judging hasn't started.</strong> It opens when submissions close, {% when event.submissions_close_at event %}, so you'll see each project's final version.</p></div>
+{% elif phase == 'closed' %}
+<div class="notice notice-closed"><p><strong>Judging ended {% when event.judging_ends_at event %}.</strong> Your scores are final and read-only.</p></div>
+{% elif event.judging_ends_at %}
+<div class="notice"><p>Judging closes {% when event.judging_ends_at event %}: <strong data-countdown="{{ event.judging_ends_at|iso }}" data-done="closed">{{ event.judging_ends_at|until }}</strong> left. You can change a submitted score until then.</p></div>
+{% endif %}
+
+{% if rows %}
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Project</th><th>Track</th><th>Status</th><th class="num">Your score</th><th></th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><a href="{% url 'judging:score' event.slug row.project.pk %}"><strong>{{ row.project.title }}</strong></a><br><span class="small muted">{{ row.project.team.name }}</span>
+          {% if row.project.duplicate_of_id %}<br><span class="flag-thin">flagged as a duplicate: not counted unless organizers list it</span>{% endif %}</td>
+        <td>{% if row.project.track %}<span class="track-chip {{ row.project.track|track_class }}">{{ row.project.track.name }}</span>{% endif %}</td>
+        <td>{% if row.status == 'submitted' %}<span class="stamp stamp-submitted">Submitted</span>{% elif row.status == 'draft' %}<span class="stamp stamp-draft">Draft</span>{% else %}<span class="stamp stamp-j-not_started">To do</span>{% endif %}</td>
+        <td class="num mono">{% if row.total is not None %}{{ row.total|floatformat:2 }}{% endif %}</td>
+        <td class="row-actions"><a href="{% url 'judging:score' event.slug row.project.pk %}">{% if row.status == 'submitted' %}Review{% elif phase == 'open' %}Score{% else %}Open{% endif %}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty"><p>Nothing assigned to you yet. The organizers assign projects once submissions close.</p></div>
+{% endif %}
+{% endblock %}

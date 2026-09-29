@@ -1,0 +1,19 @@
+{% load ui %}
+{% if voting %}
+<section class="panel vote-panel">
+  <h2 class="panel-title">Community vote</h2>
+  {% if voting.phase == 'open' %}
+    <p>Voting is open until {% when voting.config.closes_at event %}.{% if voting.config.is_quadratic %} Everyone gets {{ voting.config.credits }} credits to spread over the projects they like.{% endif %}</p>
+    {% if voting.config.access == 'link' %}
+      <p class="small muted">By invitation: use the voting link the organizers shared.</p>
+    {% else %}
+      <p class="actions"><a class="btn" href="{% url 'voting:ballot' event.slug %}">Vote</a></p>
+    {% endif %}
+  {% elif voting.phase == 'not_open' %}
+    <p>Opens {% when voting.opens_at event %}, once every project is final.</p>
+  {% else %}
+    <p>Voting closed {% when voting.config.closes_at event %}.{% if not voting.config.results_published_at %} The organizers are reviewing the ballots before publishing the results.{% endif %}</p>
+    {% if voting.config.results_published_at %}<p class="actions"><a class="btn btn-ghost" href="{% url 'voting:results' event.slug %}">See the results</a></p>{% endif %}
+  {% endif %}
+</section>
+{% endif %}

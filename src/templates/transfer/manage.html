@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Export and import · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<p class="lede-small">Everything about {{ event.name }}, out of the portal in one go, and people in by the spreadsheet-full. Leaving should be as easy as arriving.</p>
+
+<div class="split split-wide">
+  <section>
+    <header class="block-head"><h2>Export this event</h2></header>
+    <ul class="plain export-list">
+      <li><div><strong>The whole event, as an archive</strong><br><span class="small muted">A .zip: fixtures.json and shipshape.json, every CSV, the images, each certificate as a signed file with its key, and a README. Import it into another Shipshape as it is.</span></div>
+        <a class="btn btn-small" href="{% url 'transfer:archive' event.slug %}">Download .zip</a></li>
+      <li><div><strong>fixtures.json</strong><br><span class="small muted">The event in the shape every DOGFOOD portal loads: tracks, judges, teams, projects and scores. To move to another portal.</span></div>
+        <a class="btn btn-ghost btn-small" href="{% url 'transfer:fixture' event.slug %}">Download .json</a></li>
+      <li><div><strong>One stage at a time</strong><br><span class="small muted">Teams, submissions, judges, scores, rankings, votes, comments, certificates, the audit log: each as a CSV.</span></div>
+        <a class="btn btn-ghost btn-small" href="{% url 'judging:exports' event.slug %}">CSV exports</a></li>
+    </ul>
+    <p class="help">Passwords, API tokens, webhook secrets and the signing key never leave. People are identified by email.</p>
+  </section>
+
+  <aside class="side-col">
+    {% if report %}
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Preview: {{ pending.what }} from {{ pending.file }}</h2>
+      {% include "transfer/_report.html" %}
+      <form method="post" class="actions">{% csrf_token %}
+        <button class="btn btn-small" name="op" value="apply">Add them</button>
+        <button class="btn btn-ghost btn-small" name="op" value="cancel">Cancel</button>
+      </form>
+    </section>
+    {% endif %}
+    <section class="panel{% if not report %} panel-strong{% endif %}">
+      <h2 class="panel-title">Add teams from a spreadsheet</h2>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="op" value="preview_teams">
+        <div class="field"><label for="teams-file">A .csv</label><input id="teams-file" type="file" name="file" accept=".csv,text/csv" required>
+          <div class="help">Columns <span class="mono">team, member_email</span>, and optionally <span class="mono">member_name, role</span>. The teams.csv export works as it is. Rosters lock at the deadline.</div></div>
+        <button class="btn btn-small" type="submit">Preview</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">Add judges from a spreadsheet</h2>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="op" value="preview_judges">
+        <div class="field"><label for="judges-file">A .csv</label><input id="judges-file" type="file" name="file" accept=".csv,text/csv" required>
+          <div class="help">Columns <span class="mono">email</span>, and optionally <span class="mono">name, tracks</span> (track names, comma separated) and <span class="mono">all_tracks</span>. The judges.csv export works as it is.</div></div>
+        <button class="btn btn-small" type="submit">Preview</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2 class="panel-title">A whole event?</h2>
+      <p class="small">Importing a fixtures.json or an archive makes a new event: <a href="{% url 'transfer:import' %}">Organize, Import an event</a>.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

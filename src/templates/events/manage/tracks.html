@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Tracks · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<div class="split">
+  <section>
+    <header class="block-head"><h2>Tracks</h2></header>
+    {% if items %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th class="num">#</th><th>Track</th><th class="num">Projects</th><th></th></tr></thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="num">{{ item.position }}</td>
+            <td><span class="track-chip {{ item|track_class }}"><strong>{{ item.name }}</strong></span>{% if item.description %}<br><span class="small muted">{{ item.description }}</span>{% endif %}</td>
+            <td class="num">{{ item.projects.count }}</td>
+            <td class="row-actions"><a href="?edit={{ item.pk }}#editor">Edit</a>{% include "events/manage/_delete_button.html" with noun="track" %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="help">A track with projects in it can't be deleted until those projects move to another track.</p>
+    {% else %}
+    <div class="empty"><p>No tracks yet. Add the first one on the right.</p></div>
+    {% endif %}
+  </section>
+  <div>{% include "events/manage/_crud_form.html" with noun="track" %}</div>
+</div>
+{% endblock %}

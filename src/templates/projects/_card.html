@@ -1,0 +1,19 @@
+{% load ui %}
+<article class="card {{ project.track|track_class }}">
+  <a class="card-link" href="{{ project.get_absolute_url }}">
+    {% if project.thumbnail %}
+      <div class="card-thumb"><img src="{% url 'media' project.thumbnail %}" alt="" loading="lazy"></div>
+      <h3 class="card-title">{{ project.title }}</h3>
+    {% else %}
+      <div class="cover {{ project|cover_variant }}{% if project.title|length > 24 %} cover-long{% endif %}">
+        <span class="cover-band" aria-hidden="true">{{ project.track.name|default:"No track" }}</span>
+        <h3 class="cover-title">{{ project.title }}</h3>
+        <span class="cover-band cover-foot" aria-hidden="true"></span>
+      </div>
+    {% endif %}
+    <div class="card-body">
+      {% if project.tagline %}<p class="card-tagline">{{ project.tagline }}</p>{% endif %}
+      <p class="card-meta"><span>{{ project.team.name }}</span>{% if show_event %}<span>{{ project.event.name }}</span>{% endif %}</p>
+    </div>
+  </a>
+</article>

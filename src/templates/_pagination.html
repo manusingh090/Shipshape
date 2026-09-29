@@ -1,0 +1,7 @@
+{% load ui %}{% if page.has_other_pages %}
+<nav class="pager" aria-label="Pages">
+  {% if page.has_previous %}<a href="{% query page=page.previous_page_number %}">&larr; Previous</a>{% else %}<span class="disabled">&larr; Previous</span>{% endif %}
+  <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="{% query page=page.next_page_number %}">Next &rarr;</a>{% else %}<span class="disabled">Next &rarr;</span>{% endif %}
+</nav>
+{% endif %}

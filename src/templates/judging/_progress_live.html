@@ -1,0 +1,110 @@
+{% load ui %}{% with t=progress.totals %}
+<p class="live-stamp"><span class="live-dot" aria-hidden="true"></span> Live. Refreshes every 10 seconds; last read {% now "H:i:s" %} UTC.</p>
+
+<div class="stats">
+  <div class="stat"><div class="stat-num">{{ t.percent }}%</div><div class="stat-label">Reviews submitted ({{ t.submitted }} of {{ t.assignments }})</div></div>
+  <div class="stat{% if t.not_started %} stat-alert{% endif %}"><div class="stat-num">{{ t.not_started }}</div><div class="stat-label">Judges not started</div></div>
+  <div class="stat"><div class="stat-num">{{ t.in_progress }}</div><div class="stat-label">Judges part way</div></div>
+  <div class="stat"><div class="stat-num">{{ t.complete }}<span class="stat-of">/{{ t.projects }}</span></div><div class="stat-label">Projects fully reviewed</div></div>
+  <div class="stat{% if t.short %} stat-alert{% endif %}"><div class="stat-num">{{ t.short }}</div><div class="stat-label">Projects short of judges</div></div>
+</div>
+<progress class="meter-big" max="{{ t.assignments|default:1 }}" value="{{ t.submitted }}" aria-label="{{ t.percent }} percent of reviews submitted"></progress>
+<p class="small muted">Each project should get {{ progress.target }} review{{ progress.target|pluralize }}. {% if t.short %}<a href="{% url 'judging:assignments' event.slug %}">Run a batch</a> to cover the gaps.{% endif %}</p>
+
+<section class="panel panel-strong attention">
+  <h2 class="panel-title">Haven't started</h2>
+  {% if progress.not_started %}
+  <p class="small">These judges owe reviews and haven't saved a score since the work was handed to them.</p>
+  <ul class="attention-list">
+    {% for j in progress.not_started %}
+    <li>
+      <strong>{{ j.user.display_name }}</strong>
+      <span class="small">{{ j.left }} review{{ j.left|pluralize }} waiting since {% when j.oldest_pending event "short" %}</span>
+      <span class="small muted">{% if j.last_activity %}last saved a score {{ j.last_activity|since }} ago{% else %}hasn't saved a score yet{% endif %} · {{ j.user.email }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="ok">Everyone who owes a review has started.</p>
+  {% endif %}
+</section>
+
+<section class="block">
+  <header class="block-head"><h2>Judges</h2><span class="small muted">Not started at the top</span></header>
+  {% if progress.judges %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Judge</th><th>Tracks</th><th class="num">Assigned</th><th class="num">Submitted</th><th class="w-meter">Queue</th><th>Last score saved</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for j in progress.judges %}
+        <tr{% if j.status == 'not_started' %} class="row-alert"{% endif %}>
+          <td><strong>{{ j.user.display_name }}</strong>{% if j.user.external_id %}<br><span class="mono muted">{{ j.user.external_id }}</span>{% endif %}</td>
+          <td class="small">{% if j.role.all_tracks %}every track{% else %}{% for track in j.role.tracks.all %}{{ track.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">none</span>{% endfor %}{% endif %}</td>
+          <td class="num">{{ j.assigned }}</td>
+          <td class="num">{{ j.submitted }}</td>
+          <td><progress max="{{ j.assigned|default:1 }}" value="{{ j.submitted }}" aria-label="{{ j.submitted }} of {{ j.assigned }}"></progress></td>
+          <td class="small">{% if j.last_activity %}{{ j.last_activity|since }} ago{% else %}<span class="muted">never</span>{% endif %}</td>
+          <td><span class="stamp stamp-j-{{ j.status }}">{{ j.status_label }}</span>{% if j.drafts %}<br><span class="small muted">{{ j.drafts }} draft{{ j.drafts|pluralize }} open</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p>No judges yet. <a href="{% url 'judging:judges' event.slug %}">Add or invite some</a>.</p></div>
+  {% endif %}
+</section>
+
+{% if progress.batches %}
+<section class="block">
+  <header class="block-head"><h2>Batches</h2><a href="{% url 'judging:assignments' event.slug %}">Assignments</a></header>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Batch</th><th class="num">Reviews</th><th class="w-meter">Done</th><th>Haven't started this batch</th></tr></thead>
+      <tbody>
+        {% for b in progress.batches %}
+        <tr>
+          <td><strong>{{ b.batch.label }}</strong><br><span class="small muted">{% when b.batch.created_at event "short" %}{% if b.batch.seed %} · seed {{ b.batch.seed }}{% endif %}</span></td>
+          <td class="num">{{ b.submitted }}/{{ b.total }}</td>
+          <td><progress max="{{ b.total|default:1 }}" value="{{ b.submitted }}" aria-label="{{ b.submitted }} of {{ b.total }}"></progress></td>
+          <td class="small">{% for person in b.not_started %}{{ person.display_name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">everyone has started</span>{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<div class="split">
+  <section class="block">
+    <header class="block-head"><h2>Projects still needing reviews</h2></header>
+    {% with waiting=progress.projects %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Project</th><th class="num">Submitted</th><th class="num">Assigned</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for p in waiting %}{% if p.status != 'complete' %}
+          <tr>
+            <td><a href="{{ p.project.get_absolute_url }}">{{ p.project.title }}</a><br><span class="small muted">{{ p.project.track.name|default:"No track" }}</span></td>
+            <td class="num">{{ p.submitted }}/{{ p.target }}</td>
+            <td class="num">{{ p.assigned }}</td>
+            <td><span class="stamp stamp-p-{{ p.status }}">{{ p.status_label }}</span></td>
+          </tr>
+          {% endif %}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if t.complete == t.projects %}<p class="ok">Every project has all its reviews.</p>{% endif %}
+    {% endwith %}
+  </section>
+  <section class="block">
+    <header class="block-head"><h2>By track</h2></header>
+    <dl class="facts">
+      {% for track in progress.tracks %}
+      <div><dt>{{ track.name }}</dt><dd>{{ track.complete }}/{{ track.projects }}{% if track.short %} <span class="req">{{ track.short }} short</span>{% endif %}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+</div>
+{% endwith %}

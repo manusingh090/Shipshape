@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="auth-grid">
+  <section>
+    <p class="eyebrow">Welcome back</p>
+    <h1 class="display">Sign in</h1>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      {{ form.non_field_errors }}
+      {% include "_field.html" with field=form.email %}
+      {% include "_field.html" with field=form.password %}
+      <div class="actions"><button class="btn" type="submit">Sign in</button></div>
+    </form>
+    <p class="auth-foot">New here? <a href="{% url 'accounts:signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a>. It takes about twenty seconds.</p>
+  </section>
+
+  {% if demo_accounts %}
+  <section class="panel panel-strong">
+    <h2 class="panel-title">Demo accounts</h2>
+    <p class="small">This portal is running in demo mode. Pick someone to be; every seeded account also works with the password <code>{{ DEMO_PASSWORD }}</code>.</p>
+    <ul class="demo-list">
+      {% for account in demo_accounts %}
+      <li>
+        <span>
+          <span class="demo-who">{{ account.user.display_name }}</span>
+          <span class="demo-role">{{ account.role }} · {{ account.user.email }}</span>
+        </span>
+        <form method="post" action="{% url 'accounts:demo_login' %}">
+          {% csrf_token %}
+          <input type="hidden" name="who" value="{{ account.key }}">
+          {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+          <button class="btn btn-ghost btn-small" type="submit">Be {{ account.user.short_name }}</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

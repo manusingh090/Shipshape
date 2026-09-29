@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Judge {{ event.name }}{% endblock %}
+{% block content %}
+<div class="invite-card">
+  <p class="eyebrow">Judge invitation · {{ event.name }}</p>
+  <h1 class="display">Judge {{ event.name }}</h1>
+  <p>You're invited to judge {{ tracks }}. You'll only see the projects assigned to you, and nobody sees anyone else's marks.</p>
+  {% if invite.email %}<p class="small muted">This link is for {{ invite.email }}.</p>{% endif %}
+
+  {% if already %}
+    <p>You already judge this event. <a href="{% url 'judging:queue' event.slug %}">Open your queue</a>.</p>
+  {% elif invite.state == 'accepted' %}
+    <div class="notice notice-warn"><p>This invite has already been used.</p></div>
+  {% elif invite.state == 'revoked' %}
+    <div class="notice notice-warn"><p>The organizers withdrew this invite.</p></div>
+  {% elif invite.state == 'expired' %}
+    <div class="notice notice-warn"><p>This invite expired {% when invite.expires_at event %}. Ask the organizers for a new one.</p></div>
+  {% elif not user.is_authenticated %}
+    <p>Sign in or create an account first. This link brings you back here.</p>
+    <p class="actions">
+      <a class="btn" href="{% url 'accounts:login' %}?next={{ request.path|urlencode }}">Sign in</a>
+      <a class="btn btn-ghost" href="{% url 'accounts:signup' %}?next={{ request.path|urlencode }}">Create account</a>
+    </p>
+  {% else %}
+    <form method="post">
+      {% csrf_token %}
+      <p class="small">Judges can't be on a team in the event they judge.</p>
+      <p class="actions"><button class="btn" type="submit">Accept and start judging</button></p>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,5 @@
+{% extends "errors/_base.html" %}
+{% block title %}Form expired{% endblock %}
+{% block code %}403 · FORM CHECK FAILED{% endblock %}
+{% block headline %}That form had gone stale.{% endblock %}
+{% block body %}<p class="lede">Forms carry a security token so other sites can't submit them on your behalf, and this one didn't match. Reload the page and send it again. Nothing was changed.</p>{% endblock %}

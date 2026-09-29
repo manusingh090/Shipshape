@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Community vote · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "events/manage/_head.html" %}
+<div class="split split-wide">
+  <section>
+    <header class="block-head">
+      <h2>Community vote</h2>
+      <span class="stamp stamp-v-{{ phase }}">{% if phase == 'off' %}Off{% elif phase == 'not_open' %}Not open yet{% elif phase == 'open' %}Open{% else %}Closed{% endif %}</span>
+    </header>
+
+    {% if phase == 'off' %}
+    <div class="empty"><p>No community vote yet. Pick who can vote and how on the right, set a closing time, and tick &ldquo;run a community vote&rdquo;. The ballot lists every project in the gallery.</p></div>
+    {% else %}
+    <dl class="facts facts-wide">
+      <div><dt>Opens</dt><dd>{% when opens_at event %}</dd></div>
+      <div><dt>Closes</dt><dd>{% if config.closes_at %}{% when config.closes_at event %}{% else %}not set{% endif %}</dd></div>
+      <div><dt>Who can vote</dt><dd>{{ config.get_access_display }}</dd></div>
+      <div><dt>Method</dt><dd>{% if config.is_quadratic %}Quadratic, {{ credits }} credits, up to {{ ceiling }} a project{% else %}One person, one vote{% endif %}</dd></div>
+      <div><dt>Ballot order</dt><dd>{{ config.get_order_display }}</dd></div>
+    </dl>
+
+    {% if config.access == 'link' %}
+    <section class="panel link-panel">
+      <h2 class="panel-title">The voting link</h2>
+      <p>Anyone with this link can vote, one ballot per browser, no account. Share it where only the people you want will see it: the venue screen, the attendee chat.</p>
+      <div class="invite">
+        <label class="sr-only" for="vote-link">Voting link</label>
+        <input id="vote-link" type="text" value="{{ link_url }}" readonly>
+        <button class="btn btn-small" type="button" data-copy="#vote-link">Copy</button>
+      </div>
+      <form method="post" data-confirm="Make a new link? The current one stops working straight away, but ballots already cast are kept.">
+        {% csrf_token %}
+        <input type="hidden" name="op" value="new_link">
+        <p class="small">Leaked somewhere it shouldn't be? <button class="linklike danger" type="submit">Make a new link</button> and the old one stops working.</p>
+      </form>
+      <p class="help">An open link is the easiest to hand out and the easiest to stuff: someone who clears their cookies gets a fresh ballot. Email-gated or signed-in voting ties each ballot to something harder to fake.</p>
+    </section>
+    {% else %}
+    <p class="small">Ballot page: <a class="mono" href="{{ ballot_url }}">{{ ballot_url }}</a>. It's also linked from the event page while voting is open.</p>
+    {% endif %}
+    {% if config.access == 'email' %}
+    <p class="small muted">{% if mail_host %}Links are sent through {{ mail_host }}.{% else %}No mail server is set up (EMAIL_HOST), so link emails are written to <span class="mono">{{ outbox }}</span> instead of being sent. Fine for trying it out; for a real event, point EMAIL_HOST at an SMTP server.{% endif %}</p>
+    {% endif %}
+    {% endif %}
+
+    <section class="panel{% if results_state == 'awaiting_review' %} panel-strong{% endif %} link-panel">
+      <h2 class="panel-title">Results</h2>
+      {% if results_state == 'hidden' %}
+      <p>Hidden from everyone but organizers{% if phase == 'open' %} while voting is open{% endif %}. Not even the turnout shows. Once voting closes, look over the count and the ballots export, then publish.</p>
+      {% if phase == 'open' %}
+      <p class="small">{% if config.closes_at %}Voting closes {% when config.closes_at event %}. {% endif %}To publish sooner, close it now: nobody can vote after that.</p>
+      <form method="post" data-confirm="Close voting now? Nobody will be able to vote or change their ballot after this.">
+        {% csrf_token %}<input type="hidden" name="op" value="close">
+        <p class="actions"><button class="btn btn-ghost" type="submit">Close voting now</button></p>
+      </form>
+      {% endif %}
+      {% elif results_state == 'awaiting_review' %}
+      <p><strong>Voting has closed.</strong> Nobody else sees the result until you publish it. Look over the ballots first on the <a href="{% url 'integrity:review' event.slug %}">Integrity page</a>{% if warning_ballots %}: <strong>{{ warning_ballots }} counted ballot{{ warning_ballots|pluralize }} show{{ warning_ballots|pluralize:"s," }} two or more warning signs</strong>{% endif %}.</p>
+      <form method="post" data-confirm="Publish the community vote results? Anyone will be able to see them.">
+        {% csrf_token %}<input type="hidden" name="op" value="publish">
+        <p class="actions"><button class="btn" type="submit">Publish the results</button></p>
+      </form>
+      {% else %}
+      <p>Published {% when config.results_published_at event %}{% if config.results_published_by %} by {{ config.results_published_by.display_name }}{% endif %}. <a href="{{ results_url }}">See the public page</a>.</p>
+      <form method="post" data-confirm="Take the results down? Only organizers will see them again.">
+        {% csrf_token %}<input type="hidden" name="op" value="unpublish">
+        <p class="small"><button class="linklike danger" type="submit">Take them down</button></p>
+      </form>
+      {% endif %}
+    </section>
+
+    <header class="block-head block-head-spaced">
+      <h2>The count so far</h2>
+      <span class="small muted">{{ tally.voted }} ballot{{ tally.voted|pluralize }} with votes</span>
+    </header>
+    {% if not tally.voted %}
+    <div class="empty"><p>No votes yet.</p></div>
+    {% else %}
+    <p class="small">Ranked by votes, then by how many people backed the project. Only projects in the gallery count. {% if results_state == 'published' %}This is public now.{% else %}Only organizers can see this.{% endif %}</p>
+    <div class="table-wrap">
+      <table class="table results-table">
+        <thead><tr><th class="num">#</th><th>Project</th><th class="num">Votes</th><th class="num">Backers</th>{% if config.is_quadratic %}<th class="num">Credits</th>{% endif %}<th class="w-meter">Share</th></tr></thead>
+        <tbody>
+          {% for line in tally.lines %}
+          <tr{% if not line.votes %} class="row-muted"{% endif %}>
+            <td class="num rank">{% if line.votes %}{{ line.rank }}{% endif %}</td>
+            <td><a href="{{ line.project.get_absolute_url }}"><strong>{{ line.project.title }}</strong></a><br><span class="small muted">{{ line.project.team.name }}{% if line.project.track %} · {{ line.project.track.name }}{% endif %}</span></td>
+            <td class="num"><strong>{{ line.votes }}</strong></td>
+            <td class="num">{{ line.supporters }}</td>
+            {% if config.is_quadratic %}<td class="num mono small">{{ line.credits }}</td>{% endif %}
+            <td>{% if line.votes %}<progress max="100" value="{{ line.bar }}" aria-label="{{ line.share }} percent of all votes"></progress> <span class="mono small">{{ line.share }}%</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </section>
+
+  <aside class="side-col">
+    <section class="panel panel-strong">
+      <h2 class="panel-title">Settings</h2>
+      {% if locked %}<p class="small"><strong>Ballots are in.</strong> Who can vote, the method and the budget are fixed now, so every ballot is counted under the same rules. The dates can still move.</p>{% endif %}
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="op" value="config">
+        {{ form.non_field_errors }}
+        {% include "_field.html" with field=form.is_enabled %}
+        {% include "_field.html" with field=form.access %}
+        <div data-show-when="access:email">{% include "_field.html" with field=form.email_domains %}</div>
+        {% include "_field.html" with field=form.method %}
+        <div class="form-grid" data-show-when="method:quadratic">
+          {% include "_field.html" with field=form.credits %}
+          {% include "_field.html" with field=form.max_votes %}
+        </div>
+        {% include "_field.html" with field=form.order %}
+        <div class="form-grid">
+          {% include "_field.html" with field=form.opens_at %}
+          {% include "_field.html" with field=form.closes_at %}
+        </div>
+        <p class="help">Times are in {{ event.timezone }}.</p>
+        <button class="btn btn-small" type="submit">Save settings</button>
+      </form>
+    </section>
+    {% if tally.ballots %}
+    <section class="panel">
+      <h2 class="panel-title">Turnout</h2>
+      <dl class="facts">
+        <div><dt>Ballots</dt><dd>{{ tally.ballots }}</dd></div>
+        <div><dt>With at least one vote</dt><dd>{{ tally.voted }}</dd></div>
+        {% for label, n in tally.by_kind %}<div><dt>By {{ label|lower }}</dt><dd>{{ n }}</dd></div>{% endfor %}
+        {% if tally.avg_projects %}<div><dt>Projects backed, on average</dt><dd>{{ tally.avg_projects }}</dd></div>{% endif %}
+        {% if config.is_quadratic and tally.avg_credits is not None %}<div><dt>Credits spent, on average</dt><dd>{{ tally.avg_credits }} of {{ credits }}</dd></div>{% endif %}
+      </dl>
+    </section>
+    {% endif %}
+    <section class="panel">
+      <h2 class="panel-title">Why quadratic, with a ceiling</h2>
+      <p class="small">In simulated votes with a group of friends all backing one weak project, plain one-person-one-vote let that project into the top three more than half the time once the group was a tenth of the voters. Quadratic voting with a 3-vote ceiling kept it out every time. The numbers, and where it still fails (people voting many times), are in JUDGING.md, section 10.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

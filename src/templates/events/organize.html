@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}Organize{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Organize</p>
+  <h1 class="display">Your events</h1>
+  {% if user.can_create_events %}
+    <p class="actions"><a class="btn" href="{% url 'events:create' %}">Set up a new hackathon</a> <a class="btn btn-ghost" href="{% url 'transfer:import' %}">Import one</a></p>
+  {% else %}
+    <p class="lede">You help run the events below. Creating new ones needs the organizer role, which a platform admin can give you.</p>
+  {% endif %}
+</header>
+
+{% if events %}
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Event</th><th>Status</th><th>Deadline</th><th class="num">Teams</th><th class="num">Submitted</th><th></th></tr></thead>
+    <tbody>
+      {% for event in events %}
+      <tr>
+        <td><a href="{{ event.get_absolute_url }}"><strong>{{ event.name }}</strong></a>{% if not event.is_published %} <span class="stamp stamp-draft">Unpublished</span>{% endif %}</td>
+        <td>{% include "events/_phase_stamp.html" %}</td>
+        <td>{% when event.submissions_close_at event %}</td>
+        <td class="num">{{ event.team_count }}</td>
+        <td class="num">{{ event.project_count }}</td>
+        <td class="row-actions"><a href="{% url 'events:manage' event.slug %}">Console</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty"><p>You don't organize any events yet.</p></div>
+{% endif %}
+{% endblock %}

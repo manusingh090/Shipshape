@@ -1,0 +1,22 @@
+[portal]
+base_url = "http://localhost:8080"
+
+[tiers]
+claimed = ["T1", "T2", "T3", "T4"]
+pitch = "Shipshape: an offline hackathon portal with real roles, invite-link teams, a deadline the server enforces, a public gallery, judging with weighted rubrics, track-isolated assignment and tested cross-judge normalization, a capped quadratic community vote with hidden results and anti-abuse checks, and a full REST API, webhooks, signed certificates and judge records, an embeddable gallery and whole-event import and export."
+
+[auth]
+# Printed by the seed script on every boot (DEMO_MODE=1 in docker-compose.yml).
+organizer   = "Cookie: session=org_3c9e51d7a2"
+judge_a     = "Cookie: session=jdg_a_8f14c2e6"
+judge_b     = "Cookie: session=jdg_b_52e0b9d1"
+participant = "Cookie: session=prt_91d7aa3f"
+
+[routes]
+gallery      = "/projects/"
+submit       = "/api/events/sample-hack-2026/submission"
+# judge_a is fixture judge jdg_24. The ?judge= value is only used to decide
+# whether to refuse; a judge's own session decides what they get back.
+judge_scores = "/api/judge/scores"
+peer_scores  = "/api/judge/scores?judge=jdg_24"
+csv_export   = "/api/events/sample-hack-2026/export/final-rankings.csv"
