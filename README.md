@@ -36,12 +36,12 @@ The checker's complete output is in [acceptance-report.txt](acceptance-report.tx
 
 | | Needed? | Notes |
 | --- | --- | --- |
-| **Docker with Compose v2** | Yes | Docker Desktop on Windows or macOS, or Docker Engine with the Compose plugin on Linux. The command is `docker compose` (with a space); the old `docker-compose` v1 isn't supported. Built and checked with Docker 29.6 and Compose 5.3 on Windows 11 (x86_64). |
+| **Docker with Compose v2** | Yes | Docker Desktop on Windows or macOS, or Docker Engine with the Compose plugin on Linux. The command is `docker compose` (with a space); the old `docker-compose` v1 isn't supported. Built and checked with Docker 29.6 and Compose 5.3 on Windows 11 (x86_64), and from a fresh copy of the repository on a Docker 29.8 with Compose 5.5 that had no network at all and no images. Works on amd64 (Intel and AMD) and arm64 (Apple Silicon, ARM servers). |
 | **Port 8080** | Yes, or another port | The portal is published on `localhost:8080`. If that port is taken, pick another (see [Troubleshooting](#troubleshooting)). |
-| **About 300 MB of disk and 200 MB of memory** | Yes | The image is about 280 MB; the running portal uses about 155 MB of memory with its three web workers. |
-| **Internet access** | Only for the first build | Building the image downloads the `python:3.12-slim` base image and five Python packages (Django, gunicorn, whitenoise, Pillow and tzdata). After that nothing leaves the machine: see [Is the internet ever needed?](#is-the-internet-ever-needed). |
+| **About 700 MB of disk and 200 MB of memory** | Yes | The repository is about 95 MB, the image 273 MB, and the build leaves about 300 MB of cache (`docker builder prune` frees it). The running portal uses about 155 MB of memory with its three web workers. |
+| **Internet access** | No | Not even for the first build. The base system and every Python package are in the repository, in [src/vendor/](src/vendor/README.md), so nothing is downloaded: see [Is the internet ever needed?](#is-the-internet-ever-needed). You only need a connection to get the repository in the first place. |
 | **Python 3.11 or newer** | No | Only if you want to run the acceptance checker or the test suite directly on your machine. Both can also run inside Docker instead. |
-| **Git** | No | To clone the repository. Downloading and unzipping it works just as well. |
+| **Git** | No | To clone the repository (about 95 MB, most of it the base system in `src/vendor/`). Downloading and unzipping it works just as well. |
 
 No cloud account, API key, external service or sign-up is needed for any of it.
 
@@ -62,7 +62,7 @@ No cloud account, API key, external service or sign-up is needed for any of it.
 
    (Or unzip a download and `cd` into the folder that holds `docker-compose.yml`.)
 
-3. **Start the portal.** This one command builds the image the first time (a few minutes, depending on your connection), creates the database, loads the fixture data and starts the web server:
+3. **Start the portal.** This one command builds the image the first time (about half a minute, with no internet needed), creates the database, loads the fixture data and starts the web server:
 
    ```bash
    docker compose up
@@ -182,10 +182,10 @@ The organizers' checker, `tests/acceptance/run.py`, is included unmodified next 
 
    On Windows, use `py` or `python` instead of `python3`.
 
-3. **Run the checker with Docker, without installing Python.** From the repository folder, while the portal is running:
+3. **Run the checker with Docker, without installing Python.** From the repository folder, while the portal is running. This borrows the portal's own image, which already has Python, so nothing is downloaded:
 
    ```bash
-   docker run --rm --network "container:$(docker compose ps -q portal)" -v "$PWD:/w:ro" -w /w python:3.12-slim python tests/acceptance/run.py .dogfood.toml --fixtures src/fixtures.json
+   docker run --rm --network "container:$(docker compose ps -q portal)" -v "$PWD:/w:ro" -w /w shipshape-portal:local python tests/acceptance/run.py .dogfood.toml --fixtures src/fixtures.json
    ```
 
    In PowerShell, write `${PWD}` instead of `$PWD`. In Git Bash on Windows, put `MSYS_NO_PATHCONV=1` in front of the command, and use `$(pwd -W)` for the folder.
@@ -356,10 +356,10 @@ python src/manage.py test                                   # the whole suite: 3
 python src/manage.py test tests.test_judging                # one module, or one test by its dotted name
 ```
 
-The run ends by saying how many API endpoints the tests exercised (all 138), with every answer checked against the OpenAPI document. To run the suite without installing Python, inside a throwaway container:
+The run ends by saying how many API endpoints the tests exercised (all 138), with every answer checked against the OpenAPI document. To run the suite without installing Python, inside a throwaway container made from the portal's image (build it first with `docker compose build`; it has everything the tests need, so this works offline too):
 
 ```bash
-docker run --rm -v "$PWD:/w:ro" -w /w -e DATA_DIR=/tmp/data python:3.12-slim sh -c "pip install -q -r src/requirements.txt && python src/manage.py test"
+docker run --rm -v "$PWD:/w:ro" -w /w -e DATA_DIR=/tmp/data shipshape-portal:local python src/manage.py test
 ```
 
 (The same notes about `$PWD` in PowerShell and Git Bash apply as in [Checking the tiers yourself](#checking-the-tiers-yourself).)
@@ -385,7 +385,8 @@ python src/records/verify.py record.json --key <hex>     # checks a signed certi
 | `docker: command not found`, or "Cannot connect to the Docker daemon" | Docker isn't installed or isn't running. Start Docker Desktop (Windows, macOS) or the Docker service (Linux: `sudo systemctl start docker`) and try again. |
 | `docker-compose: command not found`, or `unknown flag` errors | You're on the old Compose v1. Use `docker compose` (with a space), which comes with current Docker Desktop and the Linux Compose plugin. |
 | "port is already allocated" or "address already in use" | Something else uses port 8080. Run on another port: `PORTAL_PORT=8090 docker compose up` (PowerShell: `$env:PORTAL_PORT=8090; docker compose up`), then open <http://localhost:8090>. The checker's `.dogfood.toml` points at 8080, so for the checker either free 8080 or use the Docker way of running it, which doesn't go through the host port. |
-| The first build fails while downloading | The first build needs the internet, for the base image and the Python packages. Connect once, build (`docker compose build`), and from then on it runs offline. |
+| The build stops with "not found" for a file in `vendor/`, or pip says "No matching distribution found" | The copy of the repository is incomplete: the files in `src/vendor/` are missing or damaged (compare them with the checksums in [src/vendor/README.md](src/vendor/README.md)). Clone or download it again. The build never falls back to downloading them. |
+| The build says `python-3.12-slim-arm.tar.bz2` (or another name) is not found | Your processor isn't amd64 or arm64, for example a 32-bit Raspberry Pi. Only those two are included. |
 | The page doesn't load right after `docker compose up` | The first boot migrates and seeds before the web server starts. Wait for `Listening at: http://0.0.0.0:8080` in the log, or for `docker compose ps` to show `healthy`. |
 | The checker fails with "connection refused" | The portal isn't running, or it's on a port other than 8080. Start it with `docker compose up` on the default port. |
 | The checker fails the judge or participant checks | The portal isn't in demo mode, so the session cookies in `.dogfood.toml` don't exist. `DEMO_MODE` must be `1`, which is the default in `docker-compose.yml`. |
@@ -399,7 +400,9 @@ python src/records/verify.py record.json --key <hex>     # checks a signed certi
 
 ### Is the internet ever needed?
 
-Only to build the image the first time, because Docker has to download the base image and the five Python packages. After that, the portal needs nothing outside its container: no CDN, no web fonts, no hosted database, no external API, no mail server. Its content security policy only allows the portal's own address, so a page couldn't load anything from elsewhere even by mistake. The committed acceptance report was produced with the portal on a Docker network that had no route to the internet.
+No, not even to build the image. A normal Python image build downloads a base image from Docker Hub and packages from PyPI; here both are in the repository, in `src/vendor/`: the official `python:3.12-slim` system as one archive per processor type, and the seven packages as wheels. [src/vendor/README.md](src/vendor/README.md) lists each file, where it came from, its checksum and its license. The Dockerfile unpacks the archive with `FROM scratch` and installs the wheels with `pip install --no-index`, `docker-compose.yml` builds with `network: none` (so a missing file stops the build instead of being quietly downloaded) and sets `pull_policy: never` (so Compose doesn't ask Docker Hub for the image first). This was tested on a Docker with no network and no images at all: `docker compose up`, the acceptance checker and the full test suite all ran. Git and the repository download are the only times you need a connection.
+
+Once running, the portal needs nothing outside its container: no CDN, no web fonts, no hosted database, no external API, no mail server. Its content security policy only allows the portal's own address, so a page couldn't load anything from elsewhere even by mistake. The committed acceptance report was produced with the portal on a Docker network that had no route to the internet.
 
 ### Where is my data, and how do I back it up or reset it?
 
@@ -439,6 +442,7 @@ LICENSE                  MIT
 src/                     the application, and the Docker build context
   Dockerfile, boot.py      the image, and its entrypoint (migrate, seed, serve)
   requirements.txt         the five Python packages
+  vendor/                  what the build would otherwise download: the base system and the package wheels
   fixtures.json            the organizers' fixture data, unmodified
   manage.py, portal/       the Django project: settings, URLs, security headers, the test runner
   accounts/ events/ teams/ projects/ judging/ voting/ integrity/ records/ embeds/ transfer/ webhooks/ api/

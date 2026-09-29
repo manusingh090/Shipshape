@@ -1,9 +1,16 @@
 services:
   portal:
-    # Everything the image needs (code, templates, static files, fixtures.json)
-    # lives in src/, so that's the build context.
-    build: ./src
+    # Everything the image needs lives in src/, so that's the build context:
+    # the code, templates, static files and fixtures.json, and in src/vendor/
+    # the base system and the Python packages. Nothing is downloaded, and the
+    # build runs with no network, so a missing file fails loudly.
+    build:
+      context: ./src
+      network: none
     image: shipshape-portal:local
+    # Built here, never pulled: without this, the first `up` asks Docker Hub
+    # for an image by this name before building, which fails offline.
+    pull_policy: never
     ports:
       # Host port 8080 by default. If something else already uses it:
       #   PORTAL_PORT=8090 docker compose up
